@@ -92,54 +92,59 @@ int main(int argc, char** argv) {
 	int framesSinceLastSQLPing = 0;
 
 	while (true) {
-		//Check if we're still connected to master:
-		if (!Game::server->GetIsConnectedToMaster()) {
-			framesSinceMasterDisconnect++;
+		try {
+			//Check if we're still connected to master:
+			if (!Game::server->GetIsConnectedToMaster()) {
+				framesSinceMasterDisconnect++;
 
-			if (framesSinceMasterDisconnect >= 30)
-				break; //Exit our loop, shut down.
-		}
-		else framesSinceMasterDisconnect = 0;
+				if (framesSinceMasterDisconnect >= 30)
+					break; //Exit our loop, shut down.
+			}
+			else framesSinceMasterDisconnect = 0;
 
-		//In world we'd update our other systems here.
+			//In world we'd update our other systems here.
 
-		//Check for packets here:
-		Game::server->ReceiveFromMaster(); //ReceiveFromMaster also handles the master packets if needed.
-		packet = Game::server->Receive();
-		if (packet) {
-			HandlePacket(packet);
-			Game::server->DeallocatePacket(packet);
-			packet = nullptr;
-		}
-
-		//Push our log every 30s:
-		if (framesSinceLastFlush >= 900) {
-			Game::logger->Flush();
-			framesSinceLastFlush = 0;
-		} else framesSinceLastFlush++;
-
-		//Every 10 min we ping our sql server to keep it alive hopefully:
-		if (framesSinceLastSQLPing >= 40000) {
-			//Find out the master's IP for absolutely no reason:
-			std::string masterIP;
-			int masterPort;
-			sql::PreparedStatement* stmt = Database::CreatePreppedStmt("SELECT ip, port FROM servers WHERE name='master';");
-			auto res = stmt->executeQuery();
-			while (res->next()) {
-				masterIP = res->getString(1).c_str();
-				masterPort = res->getInt(2);
+			//Check for packets here:
+			Game::server->ReceiveFromMaster(); //ReceiveFromMaster also handles the master packets if needed.
+			packet = Game::server->Receive();
+			if (packet) {
+				HandlePacket(packet);
+				Game::server->DeallocatePacket(packet);
+				packet = nullptr;
 			}
 
-			delete res;
-			delete stmt;
+			//Push our log every 30s:
+			if (framesSinceLastFlush >= 900) {
+				Game::logger->Flush();
+				framesSinceLastFlush = 0;
+			} else framesSinceLastFlush++;
 
-			framesSinceLastSQLPing = 0;
+			//Every 10 min we ping our sql server to keep it alive hopefully:
+			if (framesSinceLastSQLPing >= 40000) {
+				//Find out the master's IP for absolutely no reason:
+				std::string masterIP;
+				int masterPort;
+				sql::PreparedStatement* stmt = Database::CreatePreppedStmt("SELECT ip, port FROM servers WHERE name='master';");
+				auto res = stmt->executeQuery();
+				while (res->next()) {
+					masterIP = res->getString(1).c_str();
+					masterPort = res->getInt(2);
+				}
+
+				delete res;
+				delete stmt;
+
+				framesSinceLastSQLPing = 0;
+			}
+			else framesSinceLastSQLPing++;
+
+			//Sleep our thread since auth can afford to.
+			t += std::chrono::milliseconds(mediumFramerate); //Auth can run at a lower "fps"
+			std::this_thread::sleep_until(t);
 		}
-		else framesSinceLastSQLPing++;
-
-		//Sleep our thread since auth can afford to.
-		t += std::chrono::milliseconds(mediumFramerate); //Auth can run at a lower "fps"
-		std::this_thread::sleep_until(t);
+		catch (const std::exception &e){
+		    std::cerr << e.what() << std::endl;
+		}
 	}
 
 	//Delete our objects here:
