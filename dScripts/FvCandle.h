@@ -1,8 +1,7 @@
 #pragma once
 #include "CppScripts.h"
-#include "RenderComponent.h"
 
-class FvCandle : public CppScripts::Script 
+class FvCandle : public CppScripts::Script
 {
 public:
 	void OnStartup(Entity* self);

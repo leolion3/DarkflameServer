@@ -1,9 +1,7 @@
 #include "AgSpaceStuff.h"
 #include "GeneralUtils.h"
 #include "GameMessages.h"
-#include "dZoneManager.h"
 #include "EntityManager.h"
-#include "Game.h"
 
 void AgSpaceStuff::OnStartup(Entity* self) {
 	self->AddTimer("FloaterScale", 5.0f);
@@ -20,7 +18,7 @@ void AgSpaceStuff::OnStartup(Entity* self) {
 
 	self->SetVar(u"ShakeObject", ref->GetObjectID());
 
-	self->AddTimer("ShipShakeIdle", 1.0f);
+	self->AddTimer("ShipShakeIdle", 2.0f);
 	self->SetVar(u"RandomTime", 10);
 }
 
@@ -30,18 +28,15 @@ void AgSpaceStuff::OnTimerDone(Entity* self, std::string timerName) {
 
 		GameMessages::SendPlayAnimation(self, u"scale_0" + GeneralUtils::to_u16string(scaleType));
 		self->AddTimer("FloaterPath", 0.4);
-	}
-	else if (timerName == "FloaterPath") {
+	} else if (timerName == "FloaterPath") {
 		int pathType = GeneralUtils::GenerateRandomNumber<int>(1, 4);
 		int randTime = GeneralUtils::GenerateRandomNumber<int>(20, 25);
 
 		GameMessages::SendPlayAnimation(self, u"path_0" + (GeneralUtils::to_u16string(pathType)));
 		self->AddTimer("FloaterScale", randTime);
-	}
-	else if (timerName == "ShipShakeExplode") {
+	} else if (timerName == "ShipShakeExplode") {
 		DoShake(self, true);
-	}
-	else if (timerName == "ShipShakeIdle") {
+	} else if (timerName == "ShipShakeIdle") {
 		DoShake(self, false);
 	}
 }
@@ -81,8 +76,7 @@ void AgSpaceStuff::DoShake(Entity* self, bool explodeIdle) {
 		auto* shipFxObject2 = GetEntityInGroup(ShipFX2);
 		if (shipFxObject2)
 			GameMessages::SendPlayAnimation(shipFxObject2, u"explosion");
-	}
-	else {
+	} else {
 		auto* shipFxObject = GetEntityInGroup(ShipFX);
 		auto* shipFxObject2 = GetEntityInGroup(ShipFX2);
 

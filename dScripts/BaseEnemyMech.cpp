@@ -1,8 +1,5 @@
 #include "BaseEnemyMech.h"
 #include "Entity.h"
-#include "GameMessages.h"
-#include "Game.h"
-#include "dLogger.h"
 #include "ControllablePhysicsComponent.h"
 #include "EntityManager.h"
 #include "dpWorld.h"
@@ -10,18 +7,17 @@
 #include "DestroyableComponent.h"
 
 void BaseEnemyMech::OnStartup(Entity* self) {
-    auto* destroyableComponent = self->GetComponent<DestroyableComponent>();
-    if (destroyableComponent != nullptr) {
-        destroyableComponent->SetFaction(4);
-    }
+	auto* destroyableComponent = self->GetComponent<DestroyableComponent>();
+	if (destroyableComponent != nullptr) {
+		destroyableComponent->SetFaction(4);
+	}
 }
 
 void BaseEnemyMech::OnDie(Entity* self, Entity* killer) {
 	ControllablePhysicsComponent* controlPhys = static_cast<ControllablePhysicsComponent*>(self->GetComponent(COMPONENT_TYPE_CONTROLLABLE_PHYSICS));
 	if (!controlPhys) return;
 
-	NiPoint3 newLoc = {controlPhys->GetPosition().x, dpWorld::Instance().GetHeightAtPoint(controlPhys->GetPosition()), controlPhys->GetPosition().z };
-	//NiPoint3 newLoc = { controlPhys->GetPosition().x, controlPhys->GetPosition().y, controlPhys->GetPosition().z };
+	NiPoint3 newLoc = { controlPhys->GetPosition().x, dpWorld::Instance().GetNavMesh()->GetHeightAtPoint(controlPhys->GetPosition()), controlPhys->GetPosition().z };
 
 	EntityInfo info = EntityInfo();
 	std::vector<LDFBaseData*> cfg;

@@ -10,6 +10,10 @@
 #include <map>
 
 // CPPLinq
+#ifdef _WIN32
+#define NOMINMAX
+// windows.h has min and max macros that breaks cpplinq
+#endif
 #include "cpplinq.hpp"
 
 #pragma warning (disable : 4244) //Disable double to float conversion warnings
@@ -25,13 +29,13 @@ typedef __int64_t __int64;
   \brief A virtual class for CDClient Tables
  */
 
-//! The base class for all CD tables
+ //! The base class for all CD tables
 class CDTable {
 public:
-    
-    //! Returns the table's name
-    /*!
-      \return The table name
-     */
-    virtual std::string GetName() const = 0;
+
+	//! Returns the table's name
+	/*!
+	  \return The table name
+	 */
+	virtual std::string GetName() const = 0;
 };

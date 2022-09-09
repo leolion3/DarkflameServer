@@ -1,112 +1,85 @@
 #include "RaceMaelstromGeiser.h"
-#include "DestroyableComponent.h"
 #include "GameMessages.h"
 #include "PossessableComponent.h"
 #include "PossessorComponent.h"
 #include "EntityManager.h"
 #include "RacingControlComponent.h"
 #include "dZoneManager.h"
-#include "Game.h"
-#include "dLogger.h"
 
+void RaceMaelstromGeiser::OnStartup(Entity* self) {
+	self->SetVar(u"AmFiring", false);
 
-void RaceMaelstromGeiser::OnStartup(Entity* self) 
-{
-    self->SetVar(u"AmFiring", false);
-    
-    self->AddTimer("downTime", self->GetVar<int32_t>(u"startTime"));
+	self->AddTimer("downTime", self->GetVar<int32_t>(u"startTime"));
 
-    self->SetProximityRadius(15, "deathZone");
+	self->SetProximityRadius(15, "deathZone");
 }
 
-void RaceMaelstromGeiser::OnProximityUpdate(Entity* self, Entity* entering, std::string name, std::string status)
-{
-    if (!entering->IsPlayer() || name != "deathZone" || status != "ENTER")
-    {
-        return;
-    }
+void RaceMaelstromGeiser::OnProximityUpdate(Entity* self, Entity* entering, std::string name, std::string status) {
+	if (!entering->IsPlayer() || name != "deathZone" || status != "ENTER") {
+		return;
+	}
 
-    Game::logger->Log("RaceMaelstromGeiser", "Entered\n");
+	if (!self->GetVar<bool>(u"AmFiring")) {
+		return;
+	}
 
-    if (!self->GetVar<bool>(u"AmFiring"))
-    {
-        return;
-    }
+	auto* possessableComponent = entering->GetComponent<PossessableComponent>();
 
-    Game::logger->Log("RaceMaelstromGeiser", "Smashing!\n");
+	Entity* vehicle;
+	Entity* player;
 
-    auto* possessableComponent = entering->GetComponent<PossessableComponent>();
+	if (possessableComponent != nullptr) {
+		player = EntityManager::Instance()->GetEntity(possessableComponent->GetPossessor());
 
-    Entity* vehicle;
-    Entity* player;
+		if (player == nullptr) {
+			return;
+		}
 
-    if (possessableComponent != nullptr)
-    {
-        player = EntityManager::Instance()->GetEntity(possessableComponent->GetPossessor());
+		vehicle = entering;
+	} else if (entering->IsPlayer()) {
+		auto* possessorComponent = entering->GetComponent<PossessorComponent>();
 
-        if (player == nullptr)
-        {
-            return;
-        }
+		if (possessorComponent == nullptr) {
+			return;
+		}
 
-        vehicle = entering;
-    }
-    else if (entering->IsPlayer())
-    {
-        auto* possessorComponent = entering->GetComponent<PossessorComponent>();
+		vehicle = EntityManager::Instance()->GetEntity(possessorComponent->GetPossessable());
 
-        if (possessorComponent == nullptr)
-        {
-            return;
-        }
+		if (vehicle == nullptr) {
+			return;
+		}
 
-        vehicle = EntityManager::Instance()->GetEntity(possessorComponent->GetPossessable());
+		player = entering;
+	} else {
+		return;
+	}
 
-        if (vehicle == nullptr)
-        {
-            return;
-        }
 
-        player = entering;
-    }
-    else
-    {
-        return;
-    }
-    
+	GameMessages::SendDie(vehicle, self->GetObjectID(), LWOOBJID_EMPTY, true, VIOLENT, u"", 0, 0, 0, true, false, 0);
 
-    GameMessages::SendDie(vehicle, self->GetObjectID(), LWOOBJID_EMPTY, true, VIOLENT, u"", 0, 0, 0, true, false, 0);
+	auto* zoneController = dZoneManager::Instance()->GetZoneControlObject();
 
-    auto* zoneController = dZoneManager::Instance()->GetZoneControlObject();
+	auto* racingControlComponent = zoneController->GetComponent<RacingControlComponent>();
 
-    auto* racingControlComponent = zoneController->GetComponent<RacingControlComponent>();
-
-    if (racingControlComponent != nullptr)
-    {
-        racingControlComponent->OnRequestDie(player);
-    }
+	if (racingControlComponent != nullptr) {
+		racingControlComponent->OnRequestDie(player);
+	}
 }
 
-void RaceMaelstromGeiser::OnTimerDone(Entity* self, std::string timerName) 
-{
-    if (timerName == "downTime")
-    {
-        GameMessages::SendPlayFXEffect(self->GetObjectID(), 4048, u"rebuild_medium", "geiser", LWOOBJID_EMPTY, 1, 1, true);
+void RaceMaelstromGeiser::OnTimerDone(Entity* self, std::string timerName) {
+	if (timerName == "downTime") {
+		GameMessages::SendPlayFXEffect(self->GetObjectID(), 4048, u"rebuild_medium", "geiser", LWOOBJID_EMPTY, 1, 1, true);
 
-        self->AddTimer("buildUpTime", 1);
-    }
-    else if (timerName == "buildUpTime")
-    {
-        self->SetVar(u"AmFiring", true);
+		self->AddTimer("buildUpTime", 1);
+	} else if (timerName == "buildUpTime") {
+		self->SetVar(u"AmFiring", true);
 
-        self->AddTimer("killTime", 1.5f);
-    }
-    else if (timerName == "killTime")
-    {
-        GameMessages::SendStopFXEffect(self, true, "geiser");
+		self->AddTimer("killTime", 1.5f);
+	} else if (timerName == "killTime") {
+		GameMessages::SendStopFXEffect(self, true, "geiser");
 
-        self->SetVar(u"AmFiring", false);
+		self->SetVar(u"AmFiring", false);
 
-        self->AddTimer("downTime", 3.0);
-    }
+		self->AddTimer("downTime", 3.0);
+	}
 }

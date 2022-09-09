@@ -1,22 +1,18 @@
-﻿#include "GfBanana.h"
+#include "GfBanana.h"
 
 #include "Entity.h"
 #include "DestroyableComponent.h"
 #include "EntityManager.h"
-#include "dLogger.h"
 
-void GfBanana::SpawnBanana(Entity* self)
-{
-	Game::logger->Log("GfBanana", "Spawning banana\n");
-
+void GfBanana::SpawnBanana(Entity* self) {
 	auto position = self->GetPosition();
 	const auto rotation = self->GetRotation();
-	
+
 	position.y += 12;
 	position.x -= rotation.GetRightVector().x * 5;
 	position.z -= rotation.GetRightVector().z * 5;
 
-	EntityInfo info {};
+	EntityInfo info{};
 
 	info.pos = position;
 	info.rot = rotation;
@@ -29,23 +25,18 @@ void GfBanana::SpawnBanana(Entity* self)
 
 	self->SetVar(u"banana", entity->GetObjectID());
 
-	entity->AddDieCallback([self]()
-	{
+	entity->AddDieCallback([self]() {
 		self->SetVar(u"banana", LWOOBJID_EMPTY);
 
 		self->AddTimer("bananaTimer", 30);
-	});
+		});
 }
 
-void GfBanana::OnStartup(Entity* self)
-{
+void GfBanana::OnStartup(Entity* self) {
 	SpawnBanana(self);
 }
 
-void GfBanana::OnHit(Entity* self, Entity* attacker)
-{
-	Game::logger->Log("GfBanana", "Spawning cluster\n");
-
+void GfBanana::OnHit(Entity* self, Entity* attacker) {
 	auto* destroyable = self->GetComponent<DestroyableComponent>();
 
 	destroyable->SetHealth(9999);
@@ -56,8 +47,7 @@ void GfBanana::OnHit(Entity* self, Entity* attacker)
 
 	auto* bananaEntity = EntityManager::Instance()->GetEntity(bananaId);
 
-	if (bananaEntity == nullptr)
-	{
+	if (bananaEntity == nullptr) {
 		self->SetVar(u"banana", LWOOBJID_EMPTY);
 
 		self->AddTimer("bananaTimer", 30);
@@ -65,7 +55,7 @@ void GfBanana::OnHit(Entity* self, Entity* attacker)
 		return;
 	}
 
-	bananaEntity->SetPosition(bananaEntity->GetPosition() - NiPoint3::UNIT_Y * 5);
+	bananaEntity->SetPosition(bananaEntity->GetPosition() - NiPoint3::UNIT_Y * 8);
 
 	auto* bananaDestroyable = bananaEntity->GetComponent<DestroyableComponent>();
 
@@ -76,7 +66,7 @@ void GfBanana::OnHit(Entity* self, Entity* attacker)
 	/*
 	auto position = self->GetPosition();
 	const auto rotation = self->GetRotation();
-	
+
 	position.y += 12;
 	position.x -= rotation.GetRightVector().x * 5;
 	position.z -= rotation.GetRightVector().z * 5;
@@ -96,10 +86,8 @@ void GfBanana::OnHit(Entity* self, Entity* attacker)
 	EntityManager::Instance()->SerializeEntity(self);
 }
 
-void GfBanana::OnTimerDone(Entity* self, std::string timerName)
-{
-	if (timerName == "bananaTimer")
-	{
+void GfBanana::OnTimerDone(Entity* self, std::string timerName) {
+	if (timerName == "bananaTimer") {
 		SpawnBanana(self);
 	}
 }

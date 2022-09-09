@@ -12,13 +12,16 @@ void AgCagedBricksServer::OnUse(Entity* self, Entity* user) {
 	}
 
 	//Set the flag & mission status:
-	user->GetCharacter()->SetPlayerFlag(74, true);
+	auto character = user->GetCharacter();
+
+	if (!character) return;
+
+	character->SetPlayerFlag(74, true);
 
 	//Remove the maelstrom cube:
 	auto inv = static_cast<InventoryComponent*>(user->GetComponent(COMPONENT_TYPE_INVENTORY));
-	
-	if (inv)
-	{
+
+	if (inv) {
 		inv->RemoveItem(14553, 1);
 	}
 }

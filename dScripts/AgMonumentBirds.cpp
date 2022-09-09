@@ -1,6 +1,5 @@
 #include "AgMonumentBirds.h"
 #include "GameMessages.h"
-#include "DestroyableComponent.h"
 
 //--------------------------------------------------------------
 //Makes the ag birds fly away when you get close and smashes them.
@@ -29,6 +28,6 @@ void AgMonumentBirds::OnTimerDone(Entity* self, std::string timerName) {
 	auto* player = EntityManager::Instance()->GetEntity(self->GetVar<LWOOBJID>(u"PlayerID"));
 
 	if (player == nullptr) return;
-	
+
 	self->ScheduleKillAfterUpdate(player);
 }
