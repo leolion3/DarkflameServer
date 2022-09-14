@@ -105,7 +105,7 @@ Packet* dServer::ReceiveFromMaster() {
 		if (packet->data[0] == ID_DISCONNECTION_NOTIFICATION || packet->data[0] == ID_CONNECTION_LOST) {
 			mLogger->Log("dServer", "Lost our connection to master, shutting DOWN!");
 			mMasterConnectionActive = false;
-			//ConnectToMaster(); //We'll just shut down now
+			ConnectToMaster();
 		}
 
 		if (packet->data[0] == ID_CONNECTION_REQUEST_ACCEPTED) {
