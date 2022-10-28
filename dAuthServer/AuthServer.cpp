@@ -38,7 +38,6 @@ void getServerAddressAndConnect(dConfig* config);
 void createServer(dConfig* config, std::string masterIP, int masterPort);
 void keepDatabaseConnectionAlive();
 void pingDatabase();
-void handleServerPackets(Packet* packet);
 void destroyOnExit();
 
 int framesSinceLastSQLPing = 0;
@@ -57,8 +56,13 @@ int main(int argc, char** argv) {
     while (true) {
         if (checkConnectionToMaster() == 0)
             break;
-        Packet* packet = nullptr;
-        handleServerPackets(packet);
+        Game::server->ReceiveFromMaster(); //ReceiveFromMaster also handles the master packets if needed.
+        Packet* packet = Game::server->Receive();
+        if (packet) {
+            HandlePacket(packet);
+            Game::server->DeallocatePacket(packet);
+            packet = nullptr;
+        }
         flushServerLogs();
         keepDatabaseConnectionAlive();
         //Sleep our thread since auth can afford to.
@@ -228,19 +232,6 @@ void pingDatabase() {
 	}
 	delete res;
 	delete stmt;
-}
-
-/**
-	* @brief Handle data packets
-*/
-void handleServerPackets(Packet* packet) {
-Game::server->ReceiveFromMaster(); //ReceiveFromMaster also handles the master packets if needed.
-packet = Game::server->Receive();
-if (packet) {
-    HandlePacket(packet);
-    Game::server->DeallocatePacket(packet);
-    packet = nullptr;
-}
 }
 
 void destroyOnExit() {
