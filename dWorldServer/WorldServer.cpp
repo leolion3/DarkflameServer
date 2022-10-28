@@ -119,17 +119,16 @@ namespace WorldServer {
 void prepareDiagnostics(char** argv);
 void checkArgs(int argc, char** argv);
 int prepareLogger();
-void setGameConfigs(dConfig config);
+void setGameConfigs(dConfig* config);
 int connectToClientDB();
-int connectToMySQL(dConfig config);
-void getServerAddressAndConnect(dConfig config);
-void createServer(dConfig config, std::string masterIP, int masterPort);
-void connectChatServer(dConfig config, std::string masterIP);
+int connectToMySQL(dConfig* config);
+void getServerAddressAndConnect(dConfig* config);
+void createServer(dConfig* config, std::string masterIP, int masterPort);
+void connectChatServer(dConfig* config, std::string masterIP);
 void prepareZone();
 void checkConnectionToMaster();
 void checkCurrentFrameRate(float deltaTime);
 void checkConnectionToChatServer();
-void handleMetrics(float deltaTime, std::chrono::_V2::system_clock::time_point currentTime, std::chrono::_V2::system_clock::time_point ghostingLastTime);
 void handleRegularPacket();
 void handleChatPacket();
 void flushServerLogs();
@@ -153,14 +152,14 @@ int main(int argc, char** argv) {
     if (WorldServer::prepareLogger() == 0)
         return 0;
     dConfig config("worldconfig.ini");
-    WorldServer::setGameConfigs(config);
+    WorldServer::setGameConfigs(&config);
 
     if (WorldServer::connectToClientDB() == 0)
         return -1;
-    if (WorldServer::connectToMySQL(config) == 0)
+    if (WorldServer::connectToMySQL(&config) == 0)
         return 0;
 
-    WorldServer::getServerAddressAndConnect(config);
+    WorldServer::getServerAddressAndConnect(&config);
 
     //Set up other things:
     Game::randomEngine = std::mt19937(time(0));
@@ -188,7 +187,25 @@ int main(int argc, char** argv) {
         WorldServer::checkConnectionToMaster();
         WorldServer::checkConnectionToChatServer();
         //In world we'd update our other systems here.
-        WorldServer::handleMetrics(deltaTime, currentTime, ghostingLastTime);
+        if (zoneID != 0 && deltaTime > 0.0f) {
+			Metrics::StartMeasurement(MetricVariable::Physics);
+			dpWorld::Instance().StepWorld(deltaTime);
+			Metrics::EndMeasurement(MetricVariable::Physics);
+
+			Metrics::StartMeasurement(MetricVariable::UpdateEntities);
+			EntityManager::Instance()->UpdateEntities(deltaTime);
+			Metrics::EndMeasurement(MetricVariable::UpdateEntities);
+
+			Metrics::StartMeasurement(MetricVariable::Ghosting);
+			if (std::chrono::duration<float>(currentTime - ghostingLastTime).count() >= 1.0f) {
+				EntityManager::Instance()->UpdateGhosting();
+				ghostingLastTime = currentTime;
+			}
+			Metrics::EndMeasurement(MetricVariable::Ghosting);
+		}
+		Metrics::StartMeasurement(MetricVariable::UpdateSpawners);
+		dZoneManager::Instance()->Update(deltaTime);
+		Metrics::EndMeasurement(MetricVariable::UpdateSpawners);
         Metrics::StartMeasurement(MetricVariable::PacketHandling);
         WorldServer::handleRegularPacket();
         WorldServer::handleChatPacket();
@@ -268,11 +285,11 @@ int WorldServer::prepareLogger() {
 /**
 * @brief Prepare game configs
 */
-void WorldServer::setGameConfigs(dConfig config) {
-    Game::config = &config;
-    Game::logger->SetLogToConsole(bool(std::stoi(config.GetValue("log_to_console"))));
-    Game::logger->SetLogDebugStatements(config.GetValue("log_debug_statements") == "1");
-    if (config.GetValue("disable_chat") == "1")
+void WorldServer::setGameConfigs(dConfig* config) {
+    Game::config = config;
+    Game::logger->SetLogToConsole(bool(std::stoi((*config).GetValue("log_to_console"))));
+    Game::logger->SetLogDebugStatements((*config).GetValue("log_debug_statements") == "1");
+    if ((*config).GetValue("disable_chat") == "1")
         chatDisabled = true;
 }
 
@@ -299,7 +316,8 @@ int WorldServer::connectToClientDB() {
  * @param config - server configs
  * @return 0 if the connection failed, 1 otherwise
 */
-int WorldServer::connectToMySQL(dConfig config) {
+int WorldServer::connectToMySQL(dConfig* configPointer) {
+	dConfig config = *configPointer;
     std::string mysql_host = config.GetValue("mysql_host");
     std::string mysql_database = config.GetValue("mysql_database");
     std::string mysql_username = config.GetValue("mysql_username");
@@ -324,7 +342,7 @@ int WorldServer::connectToMySQL(dConfig config) {
 	* @brief Gets the server's IP and creates the server
 	* @param config - the server configurations
 */
-void WorldServer::getServerAddressAndConnect(dConfig config) {
+void WorldServer::getServerAddressAndConnect(dConfig* config) {
     masterIP = "localhost";
     masterPort = 1000;
     sql::PreparedStatement* stmt = Database::CreatePreppedStmt("SELECT ip, port FROM servers WHERE name='master';");
@@ -344,11 +362,11 @@ void WorldServer::getServerAddressAndConnect(dConfig config) {
 	* @param masterIP - the IP address of the server
 	* @param masterPort - the port the server should run on
 */
-void WorldServer::createServer(dConfig config, std::string masterIP, int masterPort) {
+void WorldServer::createServer(dConfig* config, std::string masterIP, int masterPort) {
     ObjectIDManager::Instance()->Initialize();
     UserManager::Instance()->Initialize();
     LootGenerator::Instance();
-    Game::chatFilter = new dChatFilter("./res/chatplus_en_us", bool(std::stoi(config.GetValue("dont_generate_dcf"))));
+    Game::chatFilter = new dChatFilter("./res/chatplus_en_us", bool(std::stoi((*config).GetValue("dont_generate_dcf"))));
 
     Game::server = new dServer(masterIP, ourPort, instanceID, maxClients, false, true, Game::logger, masterIP, masterPort, ServerType::World, zoneID);
     connectChatServer(config, masterIP);
@@ -357,7 +375,8 @@ void WorldServer::createServer(dConfig config, std::string masterIP, int masterP
 /**
  * @brief Connect the ChatServer
 */
-void WorldServer::connectChatServer(dConfig config, std::string masterIP) {
+void WorldServer::connectChatServer(dConfig* configPointer, std::string masterIP) {
+	dConfig config = *configPointer;
     if (config.GetValue("chat_server_port") != "")
         chatPort = std::atoi(config.GetValue("chat_server_port").c_str());
 
@@ -460,32 +479,6 @@ void WorldServer::checkConnectionToChatServer() {
         return;
     framesSinceChatDisconnect = 0;
     Game::chatServer->Connect(masterIP.c_str(), chatPort, "3.25 ND1", 8);
-}
-
-/**
- * @brief Measure some metrics about the world
-*/
-void WorldServer::handleMetrics(float deltaTime, std::chrono::_V2::system_clock::time_point currentTime, std::chrono::_V2::system_clock::time_point ghostingLastTime) {
-    if (zoneID == 0 || deltaTime <= 0.0f)
-        return;
-    Metrics::StartMeasurement(MetricVariable::Physics);
-    dpWorld::Instance().StepWorld(deltaTime);
-    Metrics::EndMeasurement(MetricVariable::Physics);
-
-    Metrics::StartMeasurement(MetricVariable::UpdateEntities);
-    EntityManager::Instance()->UpdateEntities(deltaTime);
-    Metrics::EndMeasurement(MetricVariable::UpdateEntities);
-
-    Metrics::StartMeasurement(MetricVariable::Ghosting);
-    if (std::chrono::duration<float>(currentTime - ghostingLastTime).count() >= 1.0f) {
-        EntityManager::Instance()->UpdateGhosting();
-        ghostingLastTime = currentTime;
-    }
-    Metrics::EndMeasurement(MetricVariable::Ghosting);
-
-    Metrics::StartMeasurement(MetricVariable::UpdateSpawners);
-    dZoneManager::Instance()->Update(deltaTime);
-    Metrics::EndMeasurement(MetricVariable::UpdateSpawners);
 }
 
 /**

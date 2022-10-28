@@ -36,10 +36,10 @@ int checkConnectionToMaster();
 void prepareDiagnostics(char** argv);
 void printServerDetails();
 int prepareServer();
-void setGameConfigs(dConfig config);
-int connectToDatabase(dConfig config);
-void getServerAddressAndConnect(dConfig config);
-void createServer(dConfig config, std::string masterIP, int masterPort);
+void setGameConfigs(dConfig* config);
+int connectToDatabase(dConfig* config);
+void getServerAddressAndConnect(dConfig* config);
+void createServer(dConfig* config, std::string masterIP, int masterPort);
 void keepDatabaseConnectionAlive();
 void pingDatabase();
 void handleServerPackets();
@@ -57,10 +57,10 @@ int main(int argc, char** argv) {
         return 0;
     ChatServer::printServerDetails();
     dConfig config("chatconfig.ini");
-    ChatServer::setGameConfigs(config);
-    if (ChatServer::connectToDatabase(config) == 0)
+    ChatServer::setGameConfigs(&config);
+    if (ChatServer::connectToDatabase(&config) == 0)
         return 0;
-    ChatServer::getServerAddressAndConnect(config);
+    ChatServer::getServerAddressAndConnect(&config);
 	Game::chatFilter = new dChatFilter("./res/chatplus_en_us", bool(std::stoi(config.GetValue("dont_generate_dcf"))));
 
     //Run it until server gets a kill message from Master:
@@ -101,8 +101,9 @@ void ChatServer::printServerDetails() {
 /**
 * @brief Prepare game configs
 */
-void ChatServer::setGameConfigs(dConfig config) {
-    Game::config = &config;
+void ChatServer::setGameConfigs(dConfig* configPointer) {
+    dConfig config = *configPointer;
+    Game::config = configPointer;
     Game::logger->SetLogToConsole(bool(std::stoi(config.GetValue("log_to_console"))));
     Game::logger->SetLogDebugStatements(config.GetValue("log_debug_statements") == "1");
 }
@@ -112,7 +113,8 @@ void ChatServer::setGameConfigs(dConfig config) {
 	* @param config - game configurations
 	* @return 1 if the connection succeeded, else 0
 */
-int ChatServer::connectToDatabase(dConfig config) {
+int ChatServer::connectToDatabase(dConfig* configPointer) {
+    dConfig config = *configPointer;
     //Connect to the MySQL Database
     std::string mysql_host = config.GetValue("mysql_host");
     std::string mysql_database = config.GetValue("mysql_database");
@@ -135,7 +137,7 @@ int ChatServer::connectToDatabase(dConfig config) {
 	* @brief Gets the server's IP and creates the server
 	* @param config - the server configurations
 */
-void ChatServer::getServerAddressAndConnect(dConfig config) {
+void ChatServer::getServerAddressAndConnect(dConfig* config) {
     //Find out the master's IP:
     std::string masterIP;
     int masterPort = 1000;
@@ -156,8 +158,9 @@ void ChatServer::getServerAddressAndConnect(dConfig config) {
 	* @param masterIP - the IP address of the server
 	* @param masterPort - the port the server should run on
 */
-void ChatServer::createServer(dConfig config, std::string masterIP, int masterPort) {
+void ChatServer::createServer(dConfig* configPointer, std::string masterIP, int masterPort) {
     //It's safe to pass 'localhost' here, as the IP is only used as the external IP.
+    dConfig config = *configPointer;
     int maxClients = 50;
     int ourPort = 1501;
     if (config.GetValue("max_clients") != "")

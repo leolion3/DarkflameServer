@@ -34,10 +34,10 @@ namespace AuthServer {
 	void prepareDiagnostics(char** argv);
 	void printServerDetails();
 	int prepareServer();
-	void setGameConfigs(dConfig config);
-	int connectToDatabase(dConfig config);
-	void getServerAddressAndConnect(dConfig config);
-	void createServer(dConfig config, std::string masterIP, int masterPort);
+	void setGameConfigs(dConfig* config);
+	int connectToDatabase(dConfig* config);
+	void getServerAddressAndConnect(dConfig* config);
+	void createServer(dConfig* config, std::string masterIP, int masterPort);
 	void keepDatabaseConnectionAlive();
 	void pingDatabase();
 	void handleServerPackets();
@@ -91,11 +91,11 @@ void AuthServer::flushServerLogs() {
 */
 int AuthServer::prepareServer() {
 	dConfig config("authconfig.ini");
-	setGameConfigs(config);
-	if (connectToDatabase(config) == 0)
+	setGameConfigs(&config);
+	if (connectToDatabase(&config) == 0)
 		return 0;
 
-	getServerAddressAndConnect(config);
+	getServerAddressAndConnect(&config);
 	return 1;
 }
 
@@ -136,8 +136,9 @@ void AuthServer::printServerDetails() {
 /**
 	* @brief Prepare game configs
 */
-void AuthServer::setGameConfigs(dConfig config) {
-	Game::config = &config;
+void AuthServer::setGameConfigs(dConfig* configPointer) {
+    Game::config = configPointer;
+    dConfig config = *configPointer;
 	Game::logger->SetLogToConsole(bool(std::stoi(config.GetValue("log_to_console"))));
 	Game::logger->SetLogDebugStatements(config.GetValue("log_debug_statements") == "1");
 }
@@ -146,7 +147,7 @@ void AuthServer::setGameConfigs(dConfig config) {
 	* @brief Gets the server's IP and creates the server
 	* @param config - the server configurations
 */
-void AuthServer::getServerAddressAndConnect(dConfig config) {
+void AuthServer::getServerAddressAndConnect(dConfig* config) {
 	//Find out the master's IP:
 	std::string masterIP;
 	int masterPort = 1500;
@@ -167,7 +168,8 @@ void AuthServer::getServerAddressAndConnect(dConfig config) {
 	* @param masterIP - the IP address of the server
 	* @param masterPort - the port the server should run on
 */
-void AuthServer::createServer(dConfig config, std::string masterIP, int masterPort) {
+void AuthServer::createServer(dConfig* configPointer, std::string masterIP, int masterPort) {
+    dConfig config = *configPointer;
 	//It's safe to pass 'localhost' here, as the IP is only used as the external IP.
 	int maxClients = 50;
 	int ourPort = 1001; //LU client is hardcoded to use this for auth port, so I'm making it the default.
@@ -184,7 +186,8 @@ void AuthServer::createServer(dConfig config, std::string masterIP, int masterPo
 	* @param config - game configurations
 	* @return 1 if the connection succeeded, else 0
 */
-int AuthServer::connectToDatabase(dConfig config) {
+int AuthServer::connectToDatabase(dConfig* configPointer) {
+    dConfig config = *configPointer;
 	//Connect to the MySQL Database
 	std::string mysql_host = config.GetValue("mysql_host");
 	std::string mysql_database = config.GetValue("mysql_database");
