@@ -153,6 +153,7 @@ int main(int argc, char** argv) {
 
     if (connectToClientDB() == 0)
         return -1;
+    CDClientManager::Instance()->Initialize();
     if (connectToMySQL(&config) == 0)
         return 0;
 
@@ -169,8 +170,12 @@ int main(int argc, char** argv) {
     auto ghostingLastTime = std::chrono::high_resolution_clock::now();
 
     PerformanceManager::SelectProfile(zoneID);
-    if (zoneID != 0)
-        prepareZone();
+    if (zoneID != 0) {
+        dpWorld::Instance().Initialize(zoneID);
+        Game::physicsWorld = &dpWorld::Instance(); //just in case some old code references it
+        dZoneManager::Instance()->Initialize(LWOZONEID(zoneID, instanceID, cloneID));
+	    prepareZone();
+	}
 
     while (true) {
         Metrics::StartMeasurement(MetricVariable::Frame);
@@ -298,7 +303,6 @@ int connectToClientDB() {
     // Connect to CDClient
     try {
         CDClientDatabase::Connect("./res/CDServer.sqlite");
-        CDClientManager::Instance()->Initialize();
         return 1;
     } catch (CppSQLite3Exception& e) {
         Game::logger->Log("WorldServer", "Unable to connect to CDServer SQLite Database");
@@ -387,9 +391,6 @@ void connectChatServer(dConfig* configPointer, std::string masterIP) {
  * @brief Prepare a new world
 */
 void prepareZone() {
-    dpWorld::Instance().Initialize(zoneID);
-    Game::physicsWorld = &dpWorld::Instance(); //just in case some old code references it
-    dZoneManager::Instance()->Initialize(LWOZONEID(zoneID, instanceID, cloneID));
     g_CloneID = cloneID;
 
     // pre calculate the FDB checksum
