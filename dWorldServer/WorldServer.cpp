@@ -148,6 +148,7 @@ int main(int argc, char** argv) {
     if (prepareLogger() == 0)
         return 0;
     dConfig config("worldconfig.ini");
+    Game::config = &config;
     setGameConfigs(&config);
 
     if (connectToClientDB() == 0)
@@ -283,7 +284,6 @@ int prepareLogger() {
 * @brief Prepare game configs
 */
 void setGameConfigs(dConfig* config) {
-    Game::config = config;
     Game::logger->SetLogToConsole(bool(std::stoi((*config).GetValue("log_to_console"))));
     Game::logger->SetLogDebugStatements((*config).GetValue("log_debug_statements") == "1");
     if ((*config).GetValue("disable_chat") == "1")

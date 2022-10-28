@@ -31,13 +31,14 @@ void flushServerLogs();
 int checkConnectionToMaster();
 void prepareDiagnostics(char** argv);
 void printServerDetails();
-int prepareServer();
+int prepareServer(dConfig* config);
 void setGameConfigs(dConfig* config);
 int connectToDatabase(dConfig* config);
 void getServerAddressAndConnect(dConfig* config);
 void createServer(dConfig* config, std::string masterIP, int masterPort);
 void keepDatabaseConnectionAlive();
 void pingDatabase();
+void handleServerPackets(Packet* packet);
 void destroyOnExit();
 
 int framesSinceLastSQLPing = 0;
@@ -50,19 +51,17 @@ int main(int argc, char** argv) {
     if (!Game::logger)
         return 0;
 	printServerDetails();
-    if (prepareServer() == 0) return 0;
+    dConfig config("authconfig.ini");
+    Game::config = &config;
+    if (prepareServer(&config) == 0)
+        return 0;
     //Run it until server gets a kill message from Master:
     auto t = std::chrono::high_resolution_clock::now();
     while (true) {
         if (checkConnectionToMaster() == 0)
             break;
-        Game::server->ReceiveFromMaster(); //ReceiveFromMaster also handles the master packets if needed.
-        Packet* packet = Game::server->Receive();
-        if (packet) {
-            HandlePacket(packet);
-            Game::server->DeallocatePacket(packet);
-            packet = nullptr;
-        }
+        Packet* packet = nullptr;
+        handleServerPackets(packet);
         flushServerLogs();
         keepDatabaseConnectionAlive();
         //Sleep our thread since auth can afford to.
@@ -91,13 +90,12 @@ void flushServerLogs() {
 	* @brief Prepare the server
 	* @return 0 if the configuration failed, 1 otherwise
 */
-int prepareServer() {
-	dConfig config("authconfig.ini");
-	setGameConfigs(&config);
-	if (connectToDatabase(&config) == 0)
+int prepareServer(dConfig* config) {
+	setGameConfigs(config);
+	if (connectToDatabase(config) == 0)
 		return 0;
 
-	getServerAddressAndConnect(&config);
+	getServerAddressAndConnect(config);
 	return 1;
 }
 
@@ -139,7 +137,6 @@ void printServerDetails() {
 	* @brief Prepare game configs
 */
 void setGameConfigs(dConfig* configPointer) {
-    Game::config = configPointer;
     dConfig config = *configPointer;
 	Game::logger->SetLogToConsole(bool(std::stoi(config.GetValue("log_to_console"))));
 	Game::logger->SetLogDebugStatements(config.GetValue("log_debug_statements") == "1");
@@ -232,6 +229,19 @@ void pingDatabase() {
 	}
 	delete res;
 	delete stmt;
+}
+
+/**
+	* @brief Handle data packets
+*/
+void handleServerPackets(Packet* packet) {
+Game::server->ReceiveFromMaster(); //ReceiveFromMaster also handles the master packets if needed.
+packet = Game::server->Receive();
+if (packet) {
+    HandlePacket(packet);
+    Game::server->DeallocatePacket(packet);
+    packet = nullptr;
+}
 }
 
 void destroyOnExit() {

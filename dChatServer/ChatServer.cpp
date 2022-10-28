@@ -41,6 +41,7 @@ void getServerAddressAndConnect(dConfig* config);
 void createServer(dConfig* config, std::string masterIP, int masterPort);
 void keepDatabaseConnectionAlive();
 void pingDatabase();
+void handleServerPackets(Packet* packet);
 void destroyOnExit();
 
 int framesSinceLastFlush = 0;
@@ -54,6 +55,7 @@ int main(int argc, char** argv) {
         return 0;
     printServerDetails();
     dConfig config("chatconfig.ini");
+    Game::config = &config;
     setGameConfigs(&config);
     if (connectToDatabase(&config) == 0)
         return 0;
@@ -66,13 +68,7 @@ int main(int argc, char** argv) {
         if (checkConnectionToMaster() == 0)
             break;
         Packet* packet = nullptr;
-        Game::server->ReceiveFromMaster(); //ReceiveFromMaster also handles the master packets if needed.
-        packet = Game::server->Receive();
-        if (packet) {
-            HandlePacket(packet);
-            Game::server->DeallocatePacket(packet);
-            packet = nullptr;
-        }
+        handleServerPackets(packet);
         flushServerLogs();
         keepDatabaseConnectionAlive();
         //Sleep our thread since auth can afford to.
@@ -107,7 +103,6 @@ void printServerDetails() {
 */
 void setGameConfigs(dConfig* configPointer) {
     dConfig config = *configPointer;
-    Game::config = configPointer;
     Game::logger->SetLogToConsole(bool(std::stoi(config.GetValue("log_to_console"))));
     Game::logger->SetLogDebugStatements(config.GetValue("log_debug_statements") == "1");
 }
@@ -199,6 +194,19 @@ void pingDatabase() {
     }
     delete res;
     delete stmt;
+}
+
+/**
+	* @brief Handle data packets
+*/
+void handleServerPackets(Packet* packet) {
+    Game::server->ReceiveFromMaster(); //ReceiveFromMaster also handles the master packets if needed.
+    packet = Game::server->Receive();
+    if (packet) {
+        HandlePacket(packet);
+        Game::server->DeallocatePacket(packet);
+        packet = nullptr;
+    }
 }
 
 /**
