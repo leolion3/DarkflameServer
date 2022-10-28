@@ -128,13 +128,13 @@ void checkCurrentFrameRate(float deltaTime);
 void checkConnectionToChatServer();
 void handleRegularPacket(Packet* packet);
 void handleChatPacket(Packet* packet);
-void flushServerLogs(Packet* packet);
+void flushServerLogs();
 void checkForPlayers(bool occupied);
 void savePlayers();
 void keepDatabaseConnectionAlive();
 void pingDatabase();
 void loadWorld();
-int handleWorldPackets();
+int handleWorldPackets(Packet* packet);
 
 int main(int argc, char** argv) {
     prepareDiagnostics(argv);
