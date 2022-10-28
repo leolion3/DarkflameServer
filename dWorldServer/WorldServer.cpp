@@ -84,7 +84,6 @@ struct tempSessionInfo {
     std::string hash;
 };
 
-Packet* packet = nullptr;
 std::map<std::string, tempSessionInfo> m_PendingUsers;
 std::string databaseChecksum = "";
 std::string masterIP = "";
@@ -114,8 +113,6 @@ bool chatDisabled = false;
 bool chatConnected = false;
 bool worldShutdownSequenceStarted = false;
 bool worldShutdownSequenceComplete = false;
-
-namespace WorldServer {
 void prepareDiagnostics(char** argv);
 void checkArgs(int argc, char** argv);
 int prepareLogger();
@@ -129,37 +126,36 @@ void prepareZone();
 void checkConnectionToMaster();
 void checkCurrentFrameRate(float deltaTime);
 void checkConnectionToChatServer();
-void handleRegularPacket();
-void handleChatPacket();
-void flushServerLogs();
+void handleRegularPacket(Packet* packet);
+void handleChatPacket(Packet* packet);
+void flushServerLogs(Packet* packet);
 void checkForPlayers(bool occupied);
 void savePlayers();
 void keepDatabaseConnectionAlive();
 void pingDatabase();
 void loadWorld();
 int handleWorldPackets();
-} // namespace WorldServer
 
 int main(int argc, char** argv) {
-    WorldServer::prepareDiagnostics(argv);
+    prepareDiagnostics(argv);
 
     // Triggers the shutdown sequence at application exit
     std::atexit(WorldShutdownSequence);
 
     signal(SIGINT, [](int) { WorldShutdownSequence(); });
     signal(SIGTERM, [](int) { WorldShutdownSequence(); });
-    WorldServer::checkArgs(argc, argv);
-    if (WorldServer::prepareLogger() == 0)
+    checkArgs(argc, argv);
+    if (prepareLogger() == 0)
         return 0;
     dConfig config("worldconfig.ini");
-    WorldServer::setGameConfigs(&config);
+    setGameConfigs(&config);
 
-    if (WorldServer::connectToClientDB() == 0)
+    if (connectToClientDB() == 0)
         return -1;
-    if (WorldServer::connectToMySQL(&config) == 0)
+    if (connectToMySQL(&config) == 0)
         return 0;
 
-    WorldServer::getServerAddressAndConnect(&config);
+    getServerAddressAndConnect(&config);
 
     //Set up other things:
     Game::randomEngine = std::mt19937(time(0));
@@ -173,7 +169,7 @@ int main(int argc, char** argv) {
 
     PerformanceManager::SelectProfile(zoneID);
     if (zoneID != 0)
-        WorldServer::prepareZone();
+        prepareZone();
 
     while (true) {
         Metrics::StartMeasurement(MetricVariable::Frame);
@@ -183,9 +179,9 @@ int main(int argc, char** argv) {
         float deltaTime = std::chrono::duration<float>(currentTime - lastTime).count();
         lastTime = currentTime;
         const auto occupied = UserManager::Instance()->GetUserCount() != 0;
-        WorldServer::checkCurrentFrameRate(deltaTime);
-        WorldServer::checkConnectionToMaster();
-        WorldServer::checkConnectionToChatServer();
+        checkCurrentFrameRate(deltaTime);
+        checkConnectionToMaster();
+        checkConnectionToChatServer();
         //In world we'd update our other systems here.
         if (zoneID != 0 && deltaTime > 0.0f) {
 			Metrics::StartMeasurement(MetricVariable::Physics);
@@ -207,24 +203,25 @@ int main(int argc, char** argv) {
 		dZoneManager::Instance()->Update(deltaTime);
 		Metrics::EndMeasurement(MetricVariable::UpdateSpawners);
         Metrics::StartMeasurement(MetricVariable::PacketHandling);
-        WorldServer::handleRegularPacket();
-        WorldServer::handleChatPacket();
-        if (WorldServer::handleWorldPackets() == 0) break;
+        Packet* packet = nullptr;
+        handleRegularPacket(packet);
+        handleChatPacket(packet);
+        if (handleWorldPackets(packet) == 0) break;
         Metrics::EndMeasurement(MetricVariable::PacketHandling);
         Metrics::StartMeasurement(MetricVariable::UpdateReplica);
         //Update our replica objects:
         Game::server->UpdateReplica();
         Metrics::EndMeasurement(MetricVariable::UpdateReplica);
-        WorldServer::flushServerLogs();
-        WorldServer::checkForPlayers(occupied);
-        WorldServer::savePlayers();
-        WorldServer::keepDatabaseConnectionAlive();
+        flushServerLogs();
+        checkForPlayers(occupied);
+        savePlayers();
+        keepDatabaseConnectionAlive();
         Metrics::EndMeasurement(MetricVariable::GameLoop);
         Metrics::StartMeasurement(MetricVariable::Sleep);
         t += std::chrono::milliseconds(currentFramerate);
         std::this_thread::sleep_until(t);
         Metrics::EndMeasurement(MetricVariable::Sleep);
-        WorldServer::loadWorld();
+        loadWorld();
         if (worldShutdownSequenceStarted && !worldShutdownSequenceComplete) {
             WorldShutdownProcess(zoneID);
             break;
@@ -239,7 +236,7 @@ int main(int argc, char** argv) {
 /**
 * Prepare server diagnostics
 */
-void WorldServer::prepareDiagnostics(char** argv) {
+void prepareDiagnostics(char** argv) {
     Diagnostics::SetProcessName("World");
     Diagnostics::SetProcessFileName(argv[0]);
     Diagnostics::Initialize();
@@ -248,7 +245,7 @@ void WorldServer::prepareDiagnostics(char** argv) {
 /**
  * @brief Update server settings based on commandline args
 */
-void WorldServer::checkArgs(int argc, char** argv) {
+void checkArgs(int argc, char** argv) {
     for (int i = 0; i < argc; ++i) {
         std::string argument(argv[i]);
         if (argument == "-zone")
@@ -268,7 +265,7 @@ void WorldServer::checkArgs(int argc, char** argv) {
  * @brief Prepare server logger
  * @return 0 if the setup failed, 1 otherwise
 */
-int WorldServer::prepareLogger() {
+int prepareLogger() {
     Game::logger = SetupLogger(zoneID, instanceID);
     if (!Game::logger)
         return 0;
@@ -285,7 +282,7 @@ int WorldServer::prepareLogger() {
 /**
 * @brief Prepare game configs
 */
-void WorldServer::setGameConfigs(dConfig* config) {
+void setGameConfigs(dConfig* config) {
     Game::config = config;
     Game::logger->SetLogToConsole(bool(std::stoi((*config).GetValue("log_to_console"))));
     Game::logger->SetLogDebugStatements((*config).GetValue("log_debug_statements") == "1");
@@ -297,7 +294,7 @@ void WorldServer::setGameConfigs(dConfig* config) {
  * @brief Connect to CDClient DB
  * @return 0 if the connection failed, 1 otherwise
 */
-int WorldServer::connectToClientDB() {
+int connectToClientDB() {
     // Connect to CDClient
     try {
         CDClientDatabase::Connect("./res/CDServer.sqlite");
@@ -316,7 +313,7 @@ int WorldServer::connectToClientDB() {
  * @param config - server configs
  * @return 0 if the connection failed, 1 otherwise
 */
-int WorldServer::connectToMySQL(dConfig* configPointer) {
+int connectToMySQL(dConfig* configPointer) {
 	dConfig config = *configPointer;
     std::string mysql_host = config.GetValue("mysql_host");
     std::string mysql_database = config.GetValue("mysql_database");
@@ -342,7 +339,7 @@ int WorldServer::connectToMySQL(dConfig* configPointer) {
 	* @brief Gets the server's IP and creates the server
 	* @param config - the server configurations
 */
-void WorldServer::getServerAddressAndConnect(dConfig* config) {
+void getServerAddressAndConnect(dConfig* config) {
     masterIP = "localhost";
     masterPort = 1000;
     sql::PreparedStatement* stmt = Database::CreatePreppedStmt("SELECT ip, port FROM servers WHERE name='master';");
@@ -362,7 +359,7 @@ void WorldServer::getServerAddressAndConnect(dConfig* config) {
 	* @param masterIP - the IP address of the server
 	* @param masterPort - the port the server should run on
 */
-void WorldServer::createServer(dConfig* config, std::string masterIP, int masterPort) {
+void createServer(dConfig* config, std::string masterIP, int masterPort) {
     ObjectIDManager::Instance()->Initialize();
     UserManager::Instance()->Initialize();
     LootGenerator::Instance();
@@ -375,7 +372,7 @@ void WorldServer::createServer(dConfig* config, std::string masterIP, int master
 /**
  * @brief Connect the ChatServer
 */
-void WorldServer::connectChatServer(dConfig* configPointer, std::string masterIP) {
+void connectChatServer(dConfig* configPointer, std::string masterIP) {
 	dConfig config = *configPointer;
     if (config.GetValue("chat_server_port") != "")
         chatPort = std::atoi(config.GetValue("chat_server_port").c_str());
@@ -389,7 +386,7 @@ void WorldServer::connectChatServer(dConfig* configPointer, std::string masterIP
 /**
  * @brief Prepare a new world
 */
-void WorldServer::prepareZone() {
+void prepareZone() {
     dpWorld::Instance().Initialize(zoneID);
     Game::physicsWorld = &dpWorld::Instance(); //just in case some old code references it
     dZoneManager::Instance()->Initialize(LWOZONEID(zoneID, instanceID, cloneID));
@@ -440,7 +437,7 @@ void WorldServer::prepareZone() {
 /**
  * @brief Check if the MasterServer is still connected
 */
-void WorldServer::checkConnectionToMaster() {
+void checkConnectionToMaster() {
     if (Game::server->GetIsConnectedToMaster()) {
         framesSinceMasterDisconnect = 0;
         return;
@@ -456,7 +453,7 @@ void WorldServer::checkConnectionToMaster() {
  * @brief Check if server is lagging behind
  * @param deltaTime - time since last frame
 */
-void WorldServer::checkCurrentFrameRate(float deltaTime) {
+void checkCurrentFrameRate(float deltaTime) {
     currentFramerate = !ready ? highFrameRate : PerformanceManager::GetServerFramerate();
 
     if (deltaTime > currentFramerate) {
@@ -467,7 +464,7 @@ void WorldServer::checkCurrentFrameRate(float deltaTime) {
 /**
  * @brief Check if the chat server is still connected
 */
-void WorldServer::checkConnectionToChatServer() {
+void checkConnectionToChatServer() {
     // Check if we're still connected to chat:
     if (chatConnected) {
         framesSinceChatDisconnect = 0;
@@ -484,7 +481,7 @@ void WorldServer::checkConnectionToChatServer() {
 /**
  * @brief Handle packets from MasterServer
 */
-void WorldServer::handleRegularPacket() {
+void handleRegularPacket(Packet* packet) {
     //Check for packets here:
     packet = Game::server->ReceiveFromMaster();
     if (packet) { //We can get messages not handle-able by the dServer class, so handle them if we returned anything.
@@ -496,7 +493,7 @@ void WorldServer::handleRegularPacket() {
 /**
  * @brief Handle packets from ChatServer
 */
-void WorldServer::handleChatPacket() {
+void handleChatPacket(Packet* packet) {
     //Handle our chat packets:
     packet = Game::chatServer->Receive();
     if (packet) {
@@ -509,7 +506,7 @@ void WorldServer::handleChatPacket() {
  * @brief Handle world specific packets
  * @return 0 if the packet was empty (error), 1 otherwise
 */
-int WorldServer::handleWorldPackets() {
+int handleWorldPackets(Packet* packet) {
 	//Handle world-specific packets:
     float timeSpent = 0.0f;
     UserManager::Instance()->DeletePendingRemovals();
@@ -531,7 +528,7 @@ int WorldServer::handleWorldPackets() {
 /**
  * @brief Flush server logs every 15 seconds
 */
-void WorldServer::flushServerLogs() {
+void flushServerLogs() {
     //Push our log every 15s:
     if (framesSinceLastFlush < 900) {
         framesSinceLastFlush++;
@@ -544,7 +541,7 @@ void WorldServer::flushServerLogs() {
 /**
  * @brief Check the current world for players or shut down
 */
-void WorldServer::checkForPlayers(bool occupied) {
+void checkForPlayers(bool occupied) {
     if (zoneID == 0 || occupied) {
         framesSinceLastUser = 0;
         return;
@@ -559,7 +556,7 @@ void WorldServer::checkForPlayers(bool occupied) {
 /**
  * @brief Save players every 10 minutes
 */
-void WorldServer::savePlayers() {
+void savePlayers() {
 
     //Save all connected users every 10 minutes:
     if (framesSinceLastUsersSave < framesToWaitForMaster - 1 || zoneID == 0) {
@@ -577,7 +574,7 @@ void WorldServer::savePlayers() {
 /**
 	* Keep database connection alive by pinging it every 10 minutes
 */
-void WorldServer::keepDatabaseConnectionAlive() {
+void keepDatabaseConnectionAlive() {
 	if (framesSinceLastSQLPing < framesToWaitForMaster) {
 		framesSinceLastSQLPing++;
 		return;
@@ -586,7 +583,7 @@ void WorldServer::keepDatabaseConnectionAlive() {
 	framesSinceLastSQLPing = 0;
 }
 
-void WorldServer::pingDatabase() {
+void pingDatabase() {
 	//Find out the master's IP for absolutely no reason:
 	std::string masterIP;
 	int masterPort;
@@ -603,7 +600,7 @@ void WorldServer::pingDatabase() {
 /**
  * @brief Transfer player into world
 */
-void WorldServer::loadWorld() {
+void loadWorld() {
 	if (!ready && Game::server->GetIsConnectedToMaster()) {
         // Some delay is required here or else we crash the client?
         framesSinceMasterStatus++;

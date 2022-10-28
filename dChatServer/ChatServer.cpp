@@ -30,7 +30,6 @@ void HandlePacket(Packet* packet);
 
 PlayerContainer playerContainer;
 
-namespace ChatServer {
 void flushServerLogs();
 int checkConnectionToMaster();
 void prepareDiagnostics(char** argv);
@@ -44,38 +43,37 @@ void keepDatabaseConnectionAlive();
 void pingDatabase();
 void handleServerPackets();
 void destroyOnExit();
-} // namespace ChatServer
 
 int framesSinceLastFlush = 0;
 int framesSinceMasterDisconnect = 0;
 int framesSinceLastSQLPing = 0;
 
 int main(int argc, char** argv) {
-    ChatServer::prepareDiagnostics(argv);
+    prepareDiagnostics(argv);
     Game::logger = SetupLogger();
     if (!Game::logger)
         return 0;
-    ChatServer::printServerDetails();
+    printServerDetails();
     dConfig config("chatconfig.ini");
-    ChatServer::setGameConfigs(&config);
-    if (ChatServer::connectToDatabase(&config) == 0)
+    setGameConfigs(&config);
+    if (connectToDatabase(&config) == 0)
         return 0;
-    ChatServer::getServerAddressAndConnect(&config);
+    getServerAddressAndConnect(&config);
 	Game::chatFilter = new dChatFilter("./res/chatplus_en_us", bool(std::stoi(config.GetValue("dont_generate_dcf"))));
 
     //Run it until server gets a kill message from Master:
     auto t = std::chrono::high_resolution_clock::now();
     while (true) {
-        if (ChatServer::checkConnectionToMaster() == 0)
+        if (checkConnectionToMaster() == 0)
             break;
-        ChatServer::handleServerPackets();
-        ChatServer::flushServerLogs();
-        ChatServer::keepDatabaseConnectionAlive();
+        handleServerPackets();
+        flushServerLogs();
+        keepDatabaseConnectionAlive();
         //Sleep our thread since auth can afford to.
         t += std::chrono::milliseconds(mediumFramerate); //Chat can run at a lower "fps"
         std::this_thread::sleep_until(t);
     }
-    ChatServer::destroyOnExit();
+    destroyOnExit();
     exit(EXIT_SUCCESS);
     return EXIT_SUCCESS;
 }
@@ -83,7 +81,7 @@ int main(int argc, char** argv) {
 /**
 * Prepare server diagnostics
 */
-void ChatServer::prepareDiagnostics(char** argv) {
+void prepareDiagnostics(char** argv) {
     Diagnostics::SetProcessName("Chat");
     Diagnostics::SetProcessFileName(argv[0]);
     Diagnostics::Initialize();
@@ -92,7 +90,7 @@ void ChatServer::prepareDiagnostics(char** argv) {
 /**
 * Print some details about the server
 */
-void ChatServer::printServerDetails() {
+void printServerDetails() {
     Game::logger->Log("ChatServer", "Starting Chat server...");
     Game::logger->Log("ChatServer", "Version: %i.%i", PROJECT_VERSION_MAJOR, PROJECT_VERSION_MINOR);
     Game::logger->Log("ChatServer", "Compiled on: %s", __TIMESTAMP__);
@@ -101,7 +99,7 @@ void ChatServer::printServerDetails() {
 /**
 * @brief Prepare game configs
 */
-void ChatServer::setGameConfigs(dConfig* configPointer) {
+void setGameConfigs(dConfig* configPointer) {
     dConfig config = *configPointer;
     Game::config = configPointer;
     Game::logger->SetLogToConsole(bool(std::stoi(config.GetValue("log_to_console"))));
@@ -113,7 +111,7 @@ void ChatServer::setGameConfigs(dConfig* configPointer) {
 	* @param config - game configurations
 	* @return 1 if the connection succeeded, else 0
 */
-int ChatServer::connectToDatabase(dConfig* configPointer) {
+int connectToDatabase(dConfig* configPointer) {
     dConfig config = *configPointer;
     //Connect to the MySQL Database
     std::string mysql_host = config.GetValue("mysql_host");
@@ -137,7 +135,7 @@ int ChatServer::connectToDatabase(dConfig* configPointer) {
 	* @brief Gets the server's IP and creates the server
 	* @param config - the server configurations
 */
-void ChatServer::getServerAddressAndConnect(dConfig* config) {
+void getServerAddressAndConnect(dConfig* config) {
     //Find out the master's IP:
     std::string masterIP;
     int masterPort = 1000;
@@ -158,7 +156,7 @@ void ChatServer::getServerAddressAndConnect(dConfig* config) {
 	* @param masterIP - the IP address of the server
 	* @param masterPort - the port the server should run on
 */
-void ChatServer::createServer(dConfig* configPointer, std::string masterIP, int masterPort) {
+void createServer(dConfig* configPointer, std::string masterIP, int masterPort) {
     //It's safe to pass 'localhost' here, as the IP is only used as the external IP.
     dConfig config = *configPointer;
     int maxClients = 50;
@@ -174,7 +172,7 @@ void ChatServer::createServer(dConfig* configPointer, std::string masterIP, int 
 /**
 	* Keep database connection alive by pinging it every 10 minutes
 */
-void ChatServer::keepDatabaseConnectionAlive() {
+void keepDatabaseConnectionAlive() {
     if (framesSinceLastSQLPing < 40000) {
         framesSinceLastSQLPing++;
         return;
@@ -183,7 +181,7 @@ void ChatServer::keepDatabaseConnectionAlive() {
     framesSinceLastSQLPing = 0;
 }
 
-void ChatServer::pingDatabase() {
+void pingDatabase() {
     //Find out the master's IP for absolutely no reason:
     std::string masterIP;
     int masterPort;
@@ -200,7 +198,7 @@ void ChatServer::pingDatabase() {
 /**
 	* @brief Handle data packets
 */
-void ChatServer::handleServerPackets() {
+void handleServerPackets() {
     Packet* packet = nullptr;
     Game::server->ReceiveFromMaster(); //ReceiveFromMaster also handles the master packets if needed.
     packet = Game::server->Receive();
@@ -214,7 +212,7 @@ void ChatServer::handleServerPackets() {
 /**
 	* @brief Check the connection to Master
 */
-int ChatServer::checkConnectionToMaster() {
+int checkConnectionToMaster() {
     //Check if we're still connected to master:
     if (Game::server->GetIsConnectedToMaster()) {
         framesSinceMasterDisconnect = 0;
@@ -230,7 +228,7 @@ int ChatServer::checkConnectionToMaster() {
 /**
 	* @brief Flush server logs every 30 seconds
 */
-void ChatServer::flushServerLogs() {
+void flushServerLogs() {
     if (framesSinceLastFlush < 900) {
         framesSinceLastFlush++;
         return;
@@ -239,7 +237,7 @@ void ChatServer::flushServerLogs() {
     framesSinceLastFlush = 0;
 }
 
-void ChatServer::destroyOnExit() {
+void destroyOnExit() {
     Database::Destroy("ChatServer");
     delete Game::server;
     delete Game::logger;

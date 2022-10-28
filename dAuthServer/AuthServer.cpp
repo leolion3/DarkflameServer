@@ -27,48 +27,45 @@ dConfig* config;
 
 dLogger* SetupLogger();
 void HandlePacket(Packet* packet);
-
-namespace AuthServer {
-	void flushServerLogs();
-	int checkConnectionToMaster();
-	void prepareDiagnostics(char** argv);
-	void printServerDetails();
-	int prepareServer();
-	void setGameConfigs(dConfig* config);
-	int connectToDatabase(dConfig* config);
-	void getServerAddressAndConnect(dConfig* config);
-	void createServer(dConfig* config, std::string masterIP, int masterPort);
-	void keepDatabaseConnectionAlive();
-	void pingDatabase();
-	void handleServerPackets();
-	void destroyOnExit();
-}
+void flushServerLogs();
+int checkConnectionToMaster();
+void prepareDiagnostics(char** argv);
+void printServerDetails();
+int prepareServer();
+void setGameConfigs(dConfig* config);
+int connectToDatabase(dConfig* config);
+void getServerAddressAndConnect(dConfig* config);
+void createServer(dConfig* config, std::string masterIP, int masterPort);
+void keepDatabaseConnectionAlive();
+void pingDatabase();
+void handleServerPackets();
+void destroyOnExit();
 
 int framesSinceLastSQLPing = 0;
 int framesSinceLastFlush = 0;
 int framesSinceMasterDisconnect = 0;
 
 int main(int argc, char** argv) {
-    AuthServer::prepareDiagnostics(argv);
+    prepareDiagnostics(argv);
     Game::logger = SetupLogger();
     if (!Game::logger)
         return 0;
-	AuthServer::printServerDetails();
-    if (AuthServer::prepareServer() == 0) return 0;
+	printServerDetails();
+    if (prepareServer() == 0) return 0;
     //Run it until server gets a kill message from Master:
     auto t = std::chrono::high_resolution_clock::now();
     while (true) {
-        if (AuthServer::checkConnectionToMaster() == 0)
+        if (checkConnectionToMaster() == 0)
             break;
-        AuthServer::handleServerPackets();
-        AuthServer::flushServerLogs();
-        AuthServer::keepDatabaseConnectionAlive();
+        handleServerPackets();
+        flushServerLogs();
+        keepDatabaseConnectionAlive();
         //Sleep our thread since auth can afford to.
         t += std::chrono::milliseconds(mediumFramerate); //Auth can run at a lower "fps"
         std::this_thread::sleep_until(t);
     }
     //Delete our objects here:
-    AuthServer::destroyOnExit();
+    destroyOnExit();
     exit(EXIT_SUCCESS);
     return EXIT_SUCCESS;
 	}
@@ -76,7 +73,7 @@ int main(int argc, char** argv) {
 /**
 	* @brief Flush server logs every 30 seconds
 */
-void AuthServer::flushServerLogs() {
+void flushServerLogs() {
     if (framesSinceLastFlush < 900) {
 		framesSinceLastFlush++;
 		return;
@@ -89,7 +86,7 @@ void AuthServer::flushServerLogs() {
 	* @brief Prepare the server
 	* @return 0 if the configuration failed, 1 otherwise
 */
-int AuthServer::prepareServer() {
+int prepareServer() {
 	dConfig config("authconfig.ini");
 	setGameConfigs(&config);
 	if (connectToDatabase(&config) == 0)
@@ -102,7 +99,7 @@ int AuthServer::prepareServer() {
 /**
 	* @brief Check the connection to Master
 */
-int AuthServer::checkConnectionToMaster() {
+int checkConnectionToMaster() {
 	//Check if we're still connected to master:
 	if (Game::server->GetIsConnectedToMaster()) {
 		framesSinceMasterDisconnect = 0;
@@ -118,7 +115,7 @@ int AuthServer::checkConnectionToMaster() {
 /**
 	* Prepare server diagnostics
 */
-void AuthServer::prepareDiagnostics(char** argv) {
+void prepareDiagnostics(char** argv) {
 	Diagnostics::SetProcessName("Auth");
 	Diagnostics::SetProcessFileName(argv[0]);
 	Diagnostics::Initialize();
@@ -127,7 +124,7 @@ void AuthServer::prepareDiagnostics(char** argv) {
 /**
 	* Print some details about the server
 */
-void AuthServer::printServerDetails() {
+void printServerDetails() {
 	Game::logger->Log("AuthServer", "Starting Auth server...");
 	Game::logger->Log("AuthServer", "Version: %i.%i", PROJECT_VERSION_MAJOR, PROJECT_VERSION_MINOR);
 	Game::logger->Log("AuthServer", "Compiled on: %s", __TIMESTAMP__);
@@ -136,7 +133,7 @@ void AuthServer::printServerDetails() {
 /**
 	* @brief Prepare game configs
 */
-void AuthServer::setGameConfigs(dConfig* configPointer) {
+void setGameConfigs(dConfig* configPointer) {
     Game::config = configPointer;
     dConfig config = *configPointer;
 	Game::logger->SetLogToConsole(bool(std::stoi(config.GetValue("log_to_console"))));
@@ -147,7 +144,7 @@ void AuthServer::setGameConfigs(dConfig* configPointer) {
 	* @brief Gets the server's IP and creates the server
 	* @param config - the server configurations
 */
-void AuthServer::getServerAddressAndConnect(dConfig* config) {
+void getServerAddressAndConnect(dConfig* config) {
 	//Find out the master's IP:
 	std::string masterIP;
 	int masterPort = 1500;
@@ -168,7 +165,7 @@ void AuthServer::getServerAddressAndConnect(dConfig* config) {
 	* @param masterIP - the IP address of the server
 	* @param masterPort - the port the server should run on
 */
-void AuthServer::createServer(dConfig* configPointer, std::string masterIP, int masterPort) {
+void createServer(dConfig* configPointer, std::string masterIP, int masterPort) {
     dConfig config = *configPointer;
 	//It's safe to pass 'localhost' here, as the IP is only used as the external IP.
 	int maxClients = 50;
@@ -186,7 +183,7 @@ void AuthServer::createServer(dConfig* configPointer, std::string masterIP, int 
 	* @param config - game configurations
 	* @return 1 if the connection succeeded, else 0
 */
-int AuthServer::connectToDatabase(dConfig* configPointer) {
+int connectToDatabase(dConfig* configPointer) {
     dConfig config = *configPointer;
 	//Connect to the MySQL Database
 	std::string mysql_host = config.GetValue("mysql_host");
@@ -209,7 +206,7 @@ int AuthServer::connectToDatabase(dConfig* configPointer) {
 /**
 	* Keep database connection alive by pinging it every 10 minutes
 */
-void AuthServer::keepDatabaseConnectionAlive() {
+void keepDatabaseConnectionAlive() {
 	if (framesSinceLastSQLPing < 40000) {
 		framesSinceLastSQLPing++;
 		return;
@@ -218,7 +215,7 @@ void AuthServer::keepDatabaseConnectionAlive() {
 	framesSinceLastSQLPing = 0;
 }
 
-void AuthServer::pingDatabase() {
+void pingDatabase() {
 	//Find out the master's IP for absolutely no reason:
 	std::string masterIP;
 	int masterPort;
@@ -235,7 +232,7 @@ void AuthServer::pingDatabase() {
 /**
 	* @brief Handle data packets
 */
-void AuthServer::handleServerPackets() {
+void handleServerPackets() {
 Packet* packet = nullptr;
 Game::server->ReceiveFromMaster(); //ReceiveFromMaster also handles the master packets if needed.
 packet = Game::server->Receive();
@@ -246,7 +243,7 @@ if (packet) {
 }
 }
 
-void AuthServer::destroyOnExit() {
+void destroyOnExit() {
 	Database::Destroy("AuthServer");
 	delete Game::server;
 	delete Game::logger;
