@@ -511,16 +511,18 @@ int handleWorldPackets(Packet* packet) {
     auto t1 = std::chrono::high_resolution_clock::now();
     for (int curPacket = 0; curPacket < maxPacketsToProcess && timeSpent < maxPacketProcessingTime; curPacket++) {
         packet = Game::server->Receive();
-        if (!packet) return 0;
-        auto t1 = std::chrono::high_resolution_clock::now();
-        HandlePacket(packet);
-        auto t2 = std::chrono::high_resolution_clock::now();
+        if (packet) {
+            auto t1 = std::chrono::high_resolution_clock::now();
+            HandlePacket(packet);
+            auto t2 = std::chrono::high_resolution_clock::now();
 
-        timeSpent += std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count();
-        Game::server->DeallocatePacket(packet);
-        packet = nullptr;
+            timeSpent += std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count();
+            Game::server->DeallocatePacket(packet);
+            packet = nullptr;
+        }
+        return 1;
     }
-	return 1;
+    return 0;
 }
 
 /**
