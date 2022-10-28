@@ -214,7 +214,23 @@ int main(int argc, char** argv) {
         handleRegularPacket(packet);
         packet = Game::chatServer->Receive();
         handleChatPacket(packet);
-        if (handleWorldPackets(packet) == 0) break;
+        float timeSpent = 0.0f;
+        UserManager::Instance()->DeletePendingRemovals();
+        auto t1 = std::chrono::high_resolution_clock::now();
+        for (int curPacket = 0; curPacket < maxPacketsToProcess && timeSpent < maxPacketProcessingTime; curPacket++) {
+            packet = Game::server->Receive();
+            if (packet) {
+                auto t1 = std::chrono::high_resolution_clock::now();
+                HandlePacket(packet);
+                auto t2 = std::chrono::high_resolution_clock::now();
+
+                timeSpent += std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count();
+                Game::server->DeallocatePacket(packet);
+                packet = nullptr;
+            } else {
+                break;
+            }
+        }
         Metrics::EndMeasurement(MetricVariable::PacketHandling);
         Metrics::StartMeasurement(MetricVariable::UpdateReplica);
         //Update our replica objects:
@@ -498,31 +514,6 @@ void handleChatPacket(Packet* packet) {
         HandlePacketChat(packet);
         Game::chatServer->DeallocatePacket(packet);
     }
-}
-
-/**
- * @brief Handle world specific packets
- * @return 0 if the packet was empty (error), 1 otherwise
-*/
-int handleWorldPackets(Packet* packet) {
-	//Handle world-specific packets:
-    float timeSpent = 0.0f;
-    UserManager::Instance()->DeletePendingRemovals();
-    auto t1 = std::chrono::high_resolution_clock::now();
-    for (int curPacket = 0; curPacket < maxPacketsToProcess && timeSpent < maxPacketProcessingTime; curPacket++) {
-        packet = Game::server->Receive();
-        if (packet) {
-            auto t1 = std::chrono::high_resolution_clock::now();
-            HandlePacket(packet);
-            auto t2 = std::chrono::high_resolution_clock::now();
-
-            timeSpent += std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count();
-            Game::server->DeallocatePacket(packet);
-            packet = nullptr;
-        }
-        return 1;
-    }
-    return 0;
 }
 
 /**
