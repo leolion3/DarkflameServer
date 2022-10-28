@@ -122,6 +122,7 @@ int connectToMySQL(dConfig* config);
 void getServerAddressAndConnect(dConfig* config);
 void createServer(dConfig* config, std::string masterIP, int masterPort);
 void connectChatServer(dConfig* config, std::string masterIP);
+void prepareZone();
 void checkConnectionToMaster();
 void checkCurrentFrameRate(float deltaTime);
 void checkConnectionToChatServer();
@@ -174,47 +175,7 @@ int main(int argc, char** argv) {
         Game::physicsWorld = &dpWorld::Instance(); //just in case some old code references it
         dZoneManager::Instance()->Initialize(LWOZONEID(zoneID, instanceID, cloneID));
         g_CloneID = cloneID;
-
-        // pre calculate the FDB checksum
-        if (Game::config->GetValue("check_fdb") != "1")
-            return;
-        std::ifstream fileStream;
-
-        static const std::vector<std::string> aliases = {
-            "res/CDServers.fdb",
-            "res/cdserver.fdb",
-            "res/CDClient.fdb",
-            "res/cdclient.fdb",
-        };
-
-        for (const auto& file : aliases) {
-            fileStream.open(file, std::ios::binary | std::ios::in);
-            if (fileStream.is_open()) {
-                break;
-            }
-        }
-
-        const int bufferSize = 1024;
-        MD5* md5 = new MD5();
-
-        char fileStreamBuffer[1024] = {};
-
-        while (!fileStream.eof()) {
-            memset(fileStreamBuffer, 0, bufferSize);
-            fileStream.read(fileStreamBuffer, bufferSize);
-            md5->update(fileStreamBuffer, fileStream.gcount());
-        }
-
-        fileStream.close();
-
-        const char* nullTerminateBuffer = "\0";
-        md5->update(nullTerminateBuffer, 1); // null terminate the data
-        md5->finalize();
-        databaseChecksum = md5->hexdigest();
-
-        delete md5;
-
-        Game::logger->Log("WorldServer", "FDB Checksum calculated as: %s", databaseChecksum.c_str());
+		prepareZone();
 	}
 
     while (true) {
@@ -249,8 +210,9 @@ int main(int argc, char** argv) {
 		dZoneManager::Instance()->Update(deltaTime);
 		Metrics::EndMeasurement(MetricVariable::UpdateSpawners);
         Metrics::StartMeasurement(MetricVariable::PacketHandling);
-        Packet* packet = nullptr;
+        Packet* packet = packet = Game::server->ReceiveFromMaster();
         handleRegularPacket(packet);
+        packet = Game::chatServer->Receive();
         handleChatPacket(packet);
         if (handleWorldPackets(packet) == 0) break;
         Metrics::EndMeasurement(MetricVariable::PacketHandling);
@@ -428,6 +390,53 @@ void connectChatServer(dConfig* configPointer, std::string masterIP) {
 }
 
 /**
+ * @brief Prepare a new world
+*/
+void prepareZone() {
+    // pre calculate the FDB checksum
+    if (Game::config->GetValue("check_fdb") != "1")
+        return;
+    Game::logger->Log("WorldServer", "Checking FDB Checksum...");
+    std::ifstream fileStream;
+
+    static const std::vector<std::string> aliases = {
+        "res/CDServers.fdb",
+        "res/cdserver.fdb",
+        "res/CDClient.fdb",
+        "res/cdclient.fdb",
+    };
+
+    for (const auto& file : aliases) {
+        fileStream.open(file, std::ios::binary | std::ios::in);
+        if (fileStream.is_open()) {
+            break;
+        }
+    }
+
+    const int bufferSize = 1024;
+    MD5* md5 = new MD5();
+
+    char fileStreamBuffer[1024] = {};
+
+    while (!fileStream.eof()) {
+        memset(fileStreamBuffer, 0, bufferSize);
+        fileStream.read(fileStreamBuffer, bufferSize);
+        md5->update(fileStreamBuffer, fileStream.gcount());
+    }
+
+    fileStream.close();
+
+    const char* nullTerminateBuffer = "\0";
+    md5->update(nullTerminateBuffer, 1); // null terminate the data
+    md5->finalize();
+    databaseChecksum = md5->hexdigest();
+
+    delete md5;
+
+    Game::logger->Log("WorldServer", "FDB Checksum calculated as: %s", databaseChecksum.c_str());
+}
+
+/**
  * @brief Check if the MasterServer is still connected
 */
 void checkConnectionToMaster() {
@@ -475,8 +484,6 @@ void checkConnectionToChatServer() {
  * @brief Handle packets from MasterServer
 */
 void handleRegularPacket(Packet* packet) {
-    //Check for packets here:
-    packet = Game::server->ReceiveFromMaster();
     if (packet) { //We can get messages not handle-able by the dServer class, so handle them if we returned anything.
         HandlePacket(packet);
         Game::server->DeallocateMasterPacket(packet);
@@ -487,8 +494,6 @@ void handleRegularPacket(Packet* packet) {
  * @brief Handle packets from ChatServer
 */
 void handleChatPacket(Packet* packet) {
-    //Handle our chat packets:
-    packet = Game::chatServer->Receive();
     if (packet) {
         HandlePacketChat(packet);
         Game::chatServer->DeallocatePacket(packet);
