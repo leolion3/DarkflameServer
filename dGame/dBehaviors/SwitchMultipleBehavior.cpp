@@ -9,11 +9,11 @@
 #include "EntityManager.h"
 
 
-void SwitchMultipleBehavior::Handle(BehaviorContext* context, RakNet::BitStream* bitStream, BehaviorBranchContext branch) {
+void SwitchMultipleBehavior::Handle(BehaviorContext* context, RakNet::BitStream& bitStream, BehaviorBranchContext branch) {
 	float value{};
 
-	if (!bitStream->Read(value)) {
-		LOG("Unable to read value from bitStream, aborting Handle! %i", bitStream->GetNumberOfUnreadBits());
+	if (!bitStream.Read(value)) {
+		LOG("Unable to read value from bitStream, aborting Handle! %i", bitStream.GetNumberOfUnreadBits());
 		return;
 	};
 
@@ -32,7 +32,7 @@ void SwitchMultipleBehavior::Handle(BehaviorContext* context, RakNet::BitStream*
 	behavior->Handle(context, bitStream, branch);
 }
 
-void SwitchMultipleBehavior::Calculate(BehaviorContext* context, RakNet::BitStream* bitStream, BehaviorBranchContext branch) {
+void SwitchMultipleBehavior::Calculate(BehaviorContext* context, RakNet::BitStream& bitStream, BehaviorBranchContext branch) {
 	// TODO
 }
 
@@ -47,11 +47,11 @@ void SwitchMultipleBehavior::Load() {
 	auto result = query.execQuery();
 
 	while (!result.eof()) {
-		const auto behavior_id = static_cast<uint32_t>(result.getFloatField(1));
+		const auto behavior_id = static_cast<uint32_t>(result.getFloatField("behavior"));
 
 		auto* behavior = CreateBehavior(behavior_id);
 
-		auto value = result.getFloatField(2);
+		auto value = result.getFloatField("value");
 
 		this->m_behaviors.emplace_back(value, behavior);
 

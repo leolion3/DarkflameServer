@@ -1,28 +1,34 @@
 #include "StripUiPosition.h"
 
 #include "Amf3.h"
+#include "tinyxml2.h"
 
-StripUiPosition::StripUiPosition() {
-	xPosition = 0.0;
-	yPosition = 0.0;
-}
-
-StripUiPosition::StripUiPosition(AMFArrayValue* arguments, std::string uiKeyName) {
-	xPosition = 0.0;
-	yPosition = 0.0;
-	auto* uiArray = arguments->GetArray(uiKeyName);
+StripUiPosition::StripUiPosition(const AMFArrayValue& arguments, const std::string& uiKeyName) {
+	const auto* const uiArray = arguments.GetArray(uiKeyName);
 	if (!uiArray) return;
 
-	auto* xPositionValue = uiArray->Get<double>("x");
-	auto* yPositionValue = uiArray->Get<double>("y");
-	if (!xPositionValue || !yPositionValue) return;
+	const auto* const xPositionValue = uiArray->Get<double>("x");
+	if (!xPositionValue) return;
 
-	yPosition = yPositionValue->GetValue();
-	xPosition = xPositionValue->GetValue();
+	const auto* const yPositionValue = uiArray->Get<double>("y");
+	if (!yPositionValue) return;
+
+	m_YPosition = yPositionValue->GetValue();
+	m_XPosition = xPositionValue->GetValue();
 }
 
 void StripUiPosition::SendBehaviorBlocksToClient(AMFArrayValue& args) const {
-	auto* uiArgs = args.InsertArray("ui");
-	uiArgs->Insert("x", xPosition);
-	uiArgs->Insert("y", yPosition);
+	auto* const uiArgs = args.InsertArray("ui");
+	uiArgs->Insert("x", m_XPosition);
+	uiArgs->Insert("y", m_YPosition);
+}
+
+void StripUiPosition::Serialize(tinyxml2::XMLElement& position) const {
+	position.SetAttribute("x", m_XPosition);
+	position.SetAttribute("y", m_YPosition);
+}
+
+void StripUiPosition::Deserialize(const tinyxml2::XMLElement& position) {
+	position.QueryDoubleAttribute("x", &m_XPosition);
+	position.QueryDoubleAttribute("y", &m_YPosition);
 }

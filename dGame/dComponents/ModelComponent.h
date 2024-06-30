@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <map>
 
 #include "dCommonVars.h"
@@ -28,7 +29,9 @@ public:
 
 	ModelComponent(Entity* parent);
 
-	void Serialize(RakNet::BitStream* outBitStream, bool bIsInitialUpdate) override;
+	void LoadBehaviors();
+
+	void Serialize(RakNet::BitStream& outBitStream, bool bIsInitialUpdate) override;
 
 	/**
 	 * Returns the original position of the model
@@ -61,7 +64,7 @@ public:
 	 * @param args the arguments of the message to be deserialized
 	 */
 	template<typename Msg>
-	void HandleControlBehaviorsMsg(AMFArrayValue* args) {
+	void HandleControlBehaviorsMsg(const AMFArrayValue& args) {
 		static_assert(std::is_base_of_v<BehaviorMessageBase, Msg>, "Msg must be a BehaviorMessageBase");
 		Msg msg(args);
 		for (auto& behavior : m_Behaviors) {
@@ -108,6 +111,8 @@ public:
 	void SendBehaviorBlocksToClient(int32_t behaviorToSend, AMFArrayValue& args) const;
 	
 	void VerifyBehaviors();
+
+	std::array<std::pair<int32_t, std::string>, 5> GetBehaviorsForSave() const;
 
 private:
 	/**

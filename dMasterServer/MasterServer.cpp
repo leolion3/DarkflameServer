@@ -40,6 +40,7 @@
 #include "BitStreamUtils.h"
 #include "Start.h"
 #include "Server.h"
+#include "CDZoneTableTable.h"
 
 namespace Game {
 	Logger* logger = nullptr;
@@ -277,6 +278,17 @@ int main(int argc, char** argv) {
 	PersistentIDManager::Initialize();
 	Game::im = new InstanceManager(Game::logger, Game::server->GetIP());
 
+	//Get CDClient initial information
+	try {
+		CDClientManager::LoadValuesFromDatabase();
+	} catch (CppSQLite3Exception& e) {
+		LOG("Failed to initialize CDServer SQLite Database");
+		LOG("May be caused by corrupted file: %s", (Game::assetManager->GetResPath() / "CDServer.sqlite").string().c_str());
+		LOG("Error: %s", e.errorMessage());
+		LOG("Error Code: %i", e.errorCode());
+		return EXIT_FAILURE;
+	}
+
 	//Depending on the config, start up servers:
 	if (Game::config->GetValue("prestart_servers") != "0") {
 		StartChatServer();
@@ -382,6 +394,7 @@ int main(int argc, char** argv) {
 }
 
 void HandlePacket(Packet* packet) {
+	if (packet->length < 1) return;
 	if (packet->data[0] == ID_DISCONNECTION_NOTIFICATION) {
 		LOG("A server has disconnected");
 
@@ -576,7 +589,7 @@ void HandlePacket(Packet* packet) {
 					BitStreamUtils::WriteHeader(bitStream, eConnectionType::MASTER, eMasterMessageType::SESSION_KEY_RESPONSE);
 					bitStream.Write(key.first);
 					bitStream.Write(username);
-					Game::server->Send(&bitStream, packet->systemAddress, false);
+					Game::server->Send(bitStream, packet->systemAddress, false);
 					break;
 				}
 			}
@@ -675,7 +688,7 @@ void HandlePacket(Packet* packet) {
 
 			const auto& zone = instance->GetZoneID();
 
-			MasterPackets::SendZoneTransferResponse(Game::server, packet->systemAddress, requestID, (bool)mythranShift, zone.GetMapID(), instance->GetInstanceID(), zone.GetCloneID(), instance->GetIP(), instance->GetPort());
+			MasterPackets::SendZoneTransferResponse(Game::server, packet->systemAddress, requestID, static_cast<bool>(mythranShift), zone.GetMapID(), instance->GetInstanceID(), zone.GetCloneID(), instance->GetIP(), instance->GetPort());
 
 			break;
 		}
@@ -786,7 +799,7 @@ int ShutdownSequence(int32_t signal) {
 	{
 		CBITSTREAM;
 		BitStreamUtils::WriteHeader(bitStream, eConnectionType::MASTER, eMasterMessageType::SHUTDOWN);
-		Game::server->Send(&bitStream, UNASSIGNED_SYSTEM_ADDRESS, true);
+		Game::server->Send(bitStream, UNASSIGNED_SYSTEM_ADDRESS, true);
 		LOG("Triggered master shutdown");
 	}
 

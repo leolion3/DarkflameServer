@@ -18,8 +18,8 @@ PossessableComponent::PossessableComponent(Entity* parent, uint32_t componentId)
 
 	// Should a result not exist for this default to attached visible
 	if (!result.eof()) {
-		m_PossessionType = static_cast<ePossessionType>(result.getIntField(0, 1)); // Default to Attached Visible
-		m_DepossessOnHit = static_cast<bool>(result.getIntField(1, 0));
+		m_PossessionType = static_cast<ePossessionType>(result.getIntField("possessionType", 1)); // Default to Attached Visible
+		m_DepossessOnHit = static_cast<bool>(result.getIntField("depossessOnHit", 0));
 	} else {
 		m_PossessionType = ePossessionType::ATTACHED_VISIBLE;
 		m_DepossessOnHit = false;
@@ -27,17 +27,17 @@ PossessableComponent::PossessableComponent(Entity* parent, uint32_t componentId)
 	result.finalize();
 }
 
-void PossessableComponent::Serialize(RakNet::BitStream* outBitStream, bool bIsInitialUpdate) {
-	outBitStream->Write(m_DirtyPossessable || bIsInitialUpdate);
+void PossessableComponent::Serialize(RakNet::BitStream& outBitStream, bool bIsInitialUpdate) {
+	outBitStream.Write(m_DirtyPossessable || bIsInitialUpdate);
 	if (m_DirtyPossessable || bIsInitialUpdate) {
 		m_DirtyPossessable = false; // reset flag
-		outBitStream->Write(m_Possessor != LWOOBJID_EMPTY);
-		if (m_Possessor != LWOOBJID_EMPTY) outBitStream->Write(m_Possessor);
+		outBitStream.Write(m_Possessor != LWOOBJID_EMPTY);
+		if (m_Possessor != LWOOBJID_EMPTY) outBitStream.Write(m_Possessor);
 
-		outBitStream->Write(m_AnimationFlag != eAnimationFlags::IDLE_NONE);
-		if (m_AnimationFlag != eAnimationFlags::IDLE_NONE) outBitStream->Write(m_AnimationFlag);
+		outBitStream.Write(m_AnimationFlag != eAnimationFlags::IDLE_NONE);
+		if (m_AnimationFlag != eAnimationFlags::IDLE_NONE) outBitStream.Write(m_AnimationFlag);
 
-		outBitStream->Write(m_ImmediatelyDepossess);
+		outBitStream.Write(m_ImmediatelyDepossess);
 		m_ImmediatelyDepossess = false; // reset flag
 	}
 }

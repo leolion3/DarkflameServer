@@ -105,7 +105,7 @@ void BehaviorContext::ExecuteUpdates() {
 	this->scheduledUpdates.clear();
 }
 
-void BehaviorContext::SyncBehavior(const uint32_t syncId, RakNet::BitStream* bitStream) {
+bool BehaviorContext::SyncBehavior(const uint32_t syncId, RakNet::BitStream& bitStream) {
 	BehaviorSyncEntry entry;
 	auto found = false;
 
@@ -128,7 +128,7 @@ void BehaviorContext::SyncBehavior(const uint32_t syncId, RakNet::BitStream* bit
 	if (!found) {
 		LOG("Failed to find behavior sync entry with sync id (%i)!", syncId);
 
-		return;
+		return false;
 	}
 
 	auto* behavior = entry.behavior;
@@ -137,10 +137,11 @@ void BehaviorContext::SyncBehavior(const uint32_t syncId, RakNet::BitStream* bit
 	if (behavior == nullptr) {
 		LOG("Invalid behavior for sync id (%i)!", syncId);
 
-		return;
+		return false;
 	}
 
 	behavior->Sync(this, bitStream, branch);
+	return true;
 }
 
 
@@ -224,6 +225,16 @@ bool BehaviorContext::CalculateUpdate(const float deltaTime) {
 	for (auto i = 0u; i < this->syncEntries.size(); ++i) {
 		auto entry = this->syncEntries.at(i);
 
+		if (entry.behavior->m_templateId == BehaviorTemplate::ATTACK_DELAY) {
+			auto* self = Game::entityManager->GetEntity(originator);
+			if (self) {
+				auto* destroyableComponent = self->GetComponent<DestroyableComponent>();
+				if (destroyableComponent && destroyableComponent->GetHealth() <= 0) {
+					continue;
+				}
+			}
+		}
+
 		if (entry.time > 0) {
 			entry.time -= deltaTime;
 
@@ -243,27 +254,25 @@ bool BehaviorContext::CalculateUpdate(const float deltaTime) {
 		echo.uiBehaviorHandle = entry.handle;
 		echo.uiSkillHandle = this->skillUId;
 
-		auto* bitStream = new RakNet::BitStream();
+		RakNet::BitStream bitStream{};
 
 		// Calculate sync
 		entry.behavior->SyncCalculation(this, bitStream, entry.branchContext);
 
 		if (!clientInitalized) {
-			echo.sBitStream.assign(reinterpret_cast<char*>(bitStream->GetData()), bitStream->GetNumberOfBytesUsed());
+			echo.sBitStream.assign(reinterpret_cast<char*>(bitStream.GetData()), bitStream.GetNumberOfBytesUsed());
 
 			// Write message
 			RakNet::BitStream message;
 
 			BitStreamUtils::WriteHeader(message, eConnectionType::CLIENT, eClientMessageType::GAME_MSG);
 			message.Write(this->originator);
-			echo.Serialize(&message);
+			echo.Serialize(message);
 
-			Game::server->Send(&message, UNASSIGNED_SYSTEM_ADDRESS, true);
+			Game::server->Send(message, UNASSIGNED_SYSTEM_ADDRESS, true);
 		}
 
 		ExecuteUpdates();
-
-		delete bitStream;
 	}
 
 	std::vector<BehaviorSyncEntry> valid;
@@ -335,7 +344,7 @@ void BehaviorContext::FilterTargets(std::vector<Entity*>& targets, std::forward_
 		}
 
 		// handle targeting the caster
-		if (candidate == caster){
+		if (candidate == caster) {
 			// if we aren't targeting self, erase, otherise increment and continue
 			if (!targetSelf) index = targets.erase(index);
 			else index++;
@@ -358,24 +367,24 @@ void BehaviorContext::FilterTargets(std::vector<Entity*>& targets, std::forward_
 		}
 
 		// if they are dead, then earse and continue
-		if (candidateDestroyableComponent->GetIsDead()){
+		if (candidateDestroyableComponent->GetIsDead()) {
 			index = targets.erase(index);
 			continue;
 		}
 
 		// if their faction is explicitly included, increment and continue
 		auto candidateFactions = candidateDestroyableComponent->GetFactionIDs();
-		if (CheckFactionList(includeFactionList, candidateFactions)){
+		if (CheckFactionList(includeFactionList, candidateFactions)) {
 			index++;
 			continue;
 		}
 
 		// check if they are a team member
-		if (targetTeam){
+		if (targetTeam) {
 			auto* team = TeamManager::Instance()->GetTeam(this->caster);
-			if (team){
+			if (team) {
 				// if we find a team member keep it and continue to skip enemy checks
-				if(std::find(team->members.begin(), team->members.end(), candidate->GetObjectID()) != team->members.end()){
+				if (std::find(team->members.begin(), team->members.end(), candidate->GetObjectID()) != team->members.end()) {
 					index++;
 					continue;
 				}
@@ -421,8 +430,8 @@ bool BehaviorContext::CheckTargetingRequirements(const Entity* target) const {
 // returns true if any of the object factions are in the faction list
 bool BehaviorContext::CheckFactionList(std::forward_list<int32_t>& factionList, std::vector<int32_t>& objectsFactions) const {
 	if (factionList.empty() || objectsFactions.empty()) return false;
-	for (auto faction : factionList){
-		if(std::find(objectsFactions.begin(), objectsFactions.end(), faction) != objectsFactions.end()) return true;
+	for (auto faction : factionList) {
+		if (std::find(objectsFactions.begin(), objectsFactions.end(), faction) != objectsFactions.end()) return true;
 	}
 	return false;
 }

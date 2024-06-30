@@ -12,6 +12,15 @@
 
 #include <iostream>
 
+void HTTPMonitorInfo::Serialize(RakNet::BitStream &bitStream) const {
+	bitStream.Write(port);
+	bitStream.Write<uint8_t>(openWeb);
+	bitStream.Write<uint8_t>(supportsSum);
+	bitStream.Write<uint8_t>(supportsDetail);
+	bitStream.Write<uint8_t>(supportsWho);
+	bitStream.Write<uint8_t>(supportsObjects);
+}
+
 void WorldPackets::SendLoadStaticZone(const SystemAddress& sysAddr, float x, float y, float z, uint32_t checksum, LWOZONEID zone) {
 	RakNet::BitStream bitStream;
 	BitStreamUtils::WriteHeader(bitStream, eConnectionType::CLIENT, eClientMessageType::LOAD_STATIC_ZONE);
@@ -87,13 +96,13 @@ void WorldPackets::SendCreateCharacter(const SystemAddress& sysAddr, int64_t rep
 	std::unique_ptr<LDFData<int32_t>> chatmode(new LDFData<int32_t>(u"chatmode", static_cast<int32_t>(gm)));
 	std::unique_ptr<LDFData<int64_t>> reputationLdf(new LDFData<int64_t>(u"reputation", reputation));
 
-	objid->WriteToPacket(&data);
-	lot->WriteToPacket(&data);
-	name->WriteToPacket(&data);
-	gmlevel->WriteToPacket(&data);
-	chatmode->WriteToPacket(&data);
-	xmlConfigData->WriteToPacket(&data);
-	reputationLdf->WriteToPacket(&data);
+	objid->WriteToPacket(data);
+	lot->WriteToPacket(data);
+	name->WriteToPacket(data);
+	gmlevel->WriteToPacket(data);
+	chatmode->WriteToPacket(data);
+	xmlConfigData->WriteToPacket(data);
+	reputationLdf->WriteToPacket(data);
 
 	//Compress the data before sending:
     const uint32_t reservedSize = ZCompression::GetMaxCompressedLength(data.GetNumberOfBytesUsed());
@@ -158,5 +167,20 @@ void WorldPackets::SendGMLevelChange(const SystemAddress& sysAddr, bool success,
 	bitStream.Write(static_cast<uint16_t>(prevLevel));
 	bitStream.Write(static_cast<uint16_t>(newLevel));
 
+	SEND_PACKET;
+}
+
+void WorldPackets::SendHTTPMonitorInfo(const SystemAddress& sysAddr, const HTTPMonitorInfo& info) {
+	CBITSTREAM;
+	BitStreamUtils::WriteHeader(bitStream, eConnectionType::CLIENT, eClientMessageType::HTTP_MONITOR_INFO_RESPONSE);
+	info.Serialize(bitStream);
+	SEND_PACKET;
+}
+
+void WorldPackets::SendDebugOuput(const SystemAddress& sysAddr, const std::string& data){
+	CBITSTREAM;
+	BitStreamUtils::WriteHeader(bitStream, eConnectionType::CLIENT, eClientMessageType::DEBUG_OUTPUT);
+	bitStream.Write<uint32_t>(data.size());
+	bitStream.Write(data);
 	SEND_PACKET;
 }

@@ -21,7 +21,7 @@ public:
 	explicit PetComponent(Entity* parentEntity, uint32_t componentId);
 	~PetComponent() override;
 
-	void Serialize(RakNet::BitStream* outBitStream, bool bIsInitialUpdate) override;
+	void Serialize(RakNet::BitStream& outBitStream, bool bIsInitialUpdate) override;
 	void Update(float deltaTime) override;
 
 	/**
@@ -165,7 +165,7 @@ public:
 	 * Sets preconditions for the pet that need  to be met before it can be tamed
 	 * @param conditions the preconditions to set
 	 */
-	void SetPreconditions(std::string& conditions);
+	void SetPreconditions(const std::string& conditions);
 
 	/**
 	 * Returns the entity that this component belongs to
@@ -251,14 +251,9 @@ private:
 	static std::unordered_map<LWOOBJID, LWOOBJID> currentActivities;
 
 	/**
-	 * Cache of all the minigames and their information from the database
-	 */
-	static std::unordered_map<LOT, PetComponent::PetPuzzleData> buildCache;
-
-	/**
 	 * Flags that indicate that a player has tamed a pet, indexed by the LOT of the pet
 	 */
-	static std::map<LOT, int32_t> petFlags;
+	static const std::map<LOT, int32_t> petFlags;
 
 	/**
 	 * The ID of the component in the pet component table
@@ -349,11 +344,10 @@ private:
 	/**
 	 * Preconditions that need to be met before an entity can tame this pet
 	 */
-	PreconditionExpression* m_Preconditions;
+	std::optional<PreconditionExpression> m_Preconditions{};
 
 	/**
 	 * Pet information loaded from the CDClientDatabase
-	 * TODO: Switch to a reference when safe to do so
 	 */
 	CDPetComponent m_PetInfo;
 };
